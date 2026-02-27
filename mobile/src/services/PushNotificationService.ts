@@ -96,7 +96,7 @@ export async function showLocalNotification(title: string, body: string) {
 }
 
 // Foreground push handling (in-app banner only — system notification is handled by App.tsx global handler)
-export function listenForegroundPush(onBanner?: (title: string, body: string) => void) {
+export function listenForegroundPush(onBanner?: (title: string, body: string, dataType?: string) => void) {
   return messaging().onMessage(async (remoteMessage) => {
     if (!onBanner) return;
     const title = (remoteMessage.data?.title as string)
@@ -105,8 +105,9 @@ export function listenForegroundPush(onBanner?: (title: string, body: string) =>
     const body = (remoteMessage.data?.body as string)
       || remoteMessage.notification?.body
       || '';
+    const dataType = remoteMessage.data?.type as string | undefined;
     if (title || body) {
-      onBanner(title, body);
+      onBanner(title, body, dataType);
     }
   });
 }

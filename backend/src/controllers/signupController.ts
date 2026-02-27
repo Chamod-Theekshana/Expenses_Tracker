@@ -114,10 +114,10 @@ export async function setPassword(req: any, res: any) {
       console.log('[Push] Saving FCM token for new user:', user.id);
       await saveUserToken(String(user.id), String(fcm_token));
 
-      // Send welcome push notification
+      // Send  push notification
       await sendPushToUser(
         String(user.id),
-        'Welcome to PulseSpend! 🎉',
+        ' to PulseSpend! 🎉',
         'Your account is ready. Start tracking your expenses!',
         { type: 'welcome' }
       );

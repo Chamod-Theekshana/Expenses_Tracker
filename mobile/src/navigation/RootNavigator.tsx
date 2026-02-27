@@ -16,6 +16,7 @@ import { NotificationsProvider, NotificationsContext } from '../store/notificati
 import NotificationBanner from '../components/NotificationBanner';
 import { connectSocket, disconnectSocket, onEvent, offEvent } from '../services/socketService';
 import { initPushForLoggedInUser, listenForegroundPush } from '../services/PushNotificationService';
+import { API_URL } from '../config/env';
 
 function RootNavigatorInner() {
   const { userEmail, isLoading, userId } = useContext(AuthContext);
@@ -65,10 +66,24 @@ function RootNavigatorInner() {
     (async () => {
       try {
         await initPushForLoggedInUser(userId);
-        unsubscribe = listenForegroundPush((title, body) => {
+        unsubscribe = listenForegroundPush((title, body, dataType) => {
+          // Skip in-app banner for test notifications (they show as system push only)
+          if (dataType === 'test_periodic') return;
           // Optional in-app banner while foreground
           show({ title, body });
         });
+
+        // Start periodic test notifications (every 60s) from backend
+        try {
+          await fetch(`${API_URL}/api/notifications/start-test`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId }),
+          });
+          console.log('[Push] Test notifications started for user:', userId);
+        } catch (e) {
+          console.error('[Push] Failed to start test notifications:', e);
+        }
       } catch (e) {
         console.error('[Push] ❌ initPushForLoggedInUser FAILED:', e);
       }
@@ -76,6 +91,12 @@ function RootNavigatorInner() {
 
     return () => {
       if (unsubscribe) unsubscribe();
+      // Stop periodic test notifications on logout/unmount
+      fetch(`${API_URL}/api/notifications/stop-test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId }),
+      }).catch((e) => console.error('[Push] Failed to stop test notifications:', e));
     };
   }, [userId, show]);
 

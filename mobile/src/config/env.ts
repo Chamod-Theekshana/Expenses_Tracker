@@ -9,14 +9,14 @@ export const CLOUDINARY_UPLOAD_PRESET = 'PROFILE';
 export const API_PORT = 5001;
 
 // 🔥 CHANGE THIS when using a physical phone
-export const REAL_DEVICE_HOST = '10.16.153.85';
+export const REAL_DEVICE_HOST = '192.168.1.129';
 
 const ANDROID_EMULATOR_HOST = '10.0.2.2';
 const IOS_SIMULATOR_HOST = 'localhost';
 
 // Set to true if you are running the app on a real phone.
 // If you're on an emulator/simulator, keep this false.
-export const USE_REAL_DEVICE = false;
+export const USE_REAL_DEVICE = true;
 
 const SIMULATOR_HOST = Platform.OS === 'android' ? ANDROID_EMULATOR_HOST : IOS_SIMULATOR_HOST;
 const DEV_HOST = USE_REAL_DEVICE ? REAL_DEVICE_HOST : SIMULATOR_HOST;

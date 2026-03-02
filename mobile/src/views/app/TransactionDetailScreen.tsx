@@ -78,11 +78,11 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
   };
 
   return (
-    <View style={[styles.wrap, { backgroundColor: colors.bg }]}> 
+    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
       <View style={styles.topRow}>
         <AppText title>Transaction</AppText>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '800' }}>Close</AppText>
+          <AppText style={{ color: colors.accent, fontWeight: '600' }}>Close</AppText>
         </Pressable>
       </View>
 

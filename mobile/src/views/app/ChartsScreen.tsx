@@ -18,14 +18,14 @@ export default function ChartsScreen() {
   const categoryData = useMemo(() => {
     const expenses = items.filter(t => t.amount < 0);
     const categories: Record<string, number> = {};
-    
+
     expenses.forEach(t => {
       const cat = t.category || 'Other';
       categories[cat] = (categories[cat] || 0) + Math.abs(t.amount);
     });
 
     const total = Object.values(categories).reduce((a, b) => a + b, 0);
-    
+
     return Object.entries(categories)
       .map(([name, value]) => ({
         name,
@@ -68,12 +68,12 @@ export default function ChartsScreen() {
     }));
   }, [items]);
 
-  const chartColors = ['#DBFF00', '#4DFF88', '#00D9FF', '#FF4D4D', '#FF9D00'];
+  const chartColors = ['#6C5CE7', '#2ED573', '#00D9FF', '#FF6B6B', '#FFAA00'];
 
   const renderPieChart = () => {
     const size = width - 80;
     const center = size / 2;
-    const radius = size / 2 - 20;
+    const r = size / 2 - 20;
     let currentAngle = -90;
 
     if (categoryData.length === 0) {
@@ -89,29 +89,20 @@ export default function ChartsScreen() {
         {categoryData.map((item, index) => {
           const angle = (item.percentage / 100) * 360;
           const startAngle = currentAngle;
-          const endAngle = currentAngle + angle;
-          
-          const x1 = center + radius * Math.cos((startAngle * Math.PI) / 180);
-          const y1 = center + radius * Math.sin((startAngle * Math.PI) / 180);
-          const x2 = center + radius * Math.cos((endAngle * Math.PI) / 180);
-          const y2 = center + radius * Math.sin((endAngle * Math.PI) / 180);
-          
-          const largeArc = angle > 180 ? 1 : 0;
-          const path = `M ${center} ${center} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
-          
+
           currentAngle += angle;
-          
+
           return (
             <Circle
               key={index}
               cx={center}
               cy={center}
-              r={radius}
+              r={r}
               fill="none"
               stroke={chartColors[index % chartColors.length]}
               strokeWidth={40}
-              strokeDasharray={`${(item.percentage / 100) * (2 * Math.PI * radius)} ${2 * Math.PI * radius}`}
-              strokeDashoffset={-((startAngle + 90) / 360) * (2 * Math.PI * radius)}
+              strokeDasharray={`${(item.percentage / 100) * (2 * Math.PI * r)} ${2 * Math.PI * r}`}
+              strokeDashoffset={-((startAngle + 90) / 360) * (2 * Math.PI * r)}
             />
           );
         })}
@@ -183,11 +174,11 @@ export default function ChartsScreen() {
       <AppText style={styles.title}>Analytics</AppText>
 
       <Card elevated style={{ marginTop: 20 }}>
-        <AppText style={{ fontWeight: '800', fontSize: 16, marginBottom: 20 }}>Expense by Category</AppText>
+        <AppText style={{ fontWeight: '700', fontSize: 16, marginBottom: 20 }}>Expense by Category</AppText>
         {renderPieChart()}
         <View style={{ marginTop: 20 }}>
           {categoryData.map((item, index) => (
-            <View key={index} style={styles.categoryRow}>
+            <View key={index} style={[styles.categoryRow, { borderBottomColor: colors.border }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                 <View style={[styles.colorDot, { backgroundColor: chartColors[index % chartColors.length] }]} />
                 <AppText style={{ fontSize: 14 }}>{item.name}</AppText>
@@ -202,7 +193,7 @@ export default function ChartsScreen() {
       </Card>
 
       <Card elevated style={{ marginTop: 20 }}>
-        <AppText style={{ fontWeight: '800', fontSize: 16, marginBottom: 20 }}>Monthly Overview</AppText>
+        <AppText style={{ fontWeight: '700', fontSize: 16, marginBottom: 20 }}>Monthly Overview</AppText>
         {renderBarChart()}
       </Card>
 
@@ -219,14 +210,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   colorDot: {
     width: 12,

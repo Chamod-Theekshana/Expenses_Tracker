@@ -1,5 +1,5 @@
 import React, { useContext } from 'react';
-import { Pressable, StyleSheet, View,Image } from 'react-native';
+import { Pressable, StyleSheet, View, Image } from 'react-native';
 import AppText from './AppText';
 import { radius } from '../theme/colors';
 import { Tx } from '../store/transactions';
@@ -30,16 +30,16 @@ export default function TransactionItem({
         pressed && { opacity: 0.7, transform: [{ scale: 0.98 }] },
       ]}
     >
-      <View style={[styles.iconBox, { backgroundColor: isIncome ? 'rgba(77,255,136,0.15)' : 'rgba(255,77,77,0.15)' }]}>
-        {isIncome ?  <Image source={images.income} style={styles.Image} /> :  <Image source={images.expense} style={styles.Image} />}
+      <View style={[styles.iconBox, { backgroundColor: isIncome ? 'rgba(46,213,115,0.12)' : 'rgba(255,107,107,0.12)' }]}>
+        {isIncome ? <Image source={images.income} style={[styles.Image, { tintColor: colors.success }]} /> : <Image source={images.expense} style={[styles.Image, { tintColor: colors.danger }]} />}
       </View>
       <View style={{ flex: 1 }}>
-        <AppText style={{ fontWeight: '700', fontSize: 15 }}>{item.title}</AppText>
+        <AppText style={{ fontWeight: '600', fontSize: 15 }}>{item.title}</AppText>
         <AppText muted style={{ marginTop: 3, fontSize: 13 }}>
-          {item.category} • {item.dateISO}
+          {item.category} · {item.dateISO}
         </AppText>
       </View>
-      <AppText mono style={{ fontWeight: '800', fontSize: 16, color: isIncome ? colors.success : colors.text }}>
+      <AppText mono style={{ fontWeight: '700', fontSize: 16, color: isIncome ? colors.success : colors.text }}>
         {formatMoney(item.amount)}
       </AppText>
     </Pressable>
@@ -50,23 +50,22 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
   iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-   Image: {
-    width: 38,
-    height: 38,
-    tintColor: '#FFFF',
-    resizeMode: 'contain'
-  }
+  Image: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
+  },
 });

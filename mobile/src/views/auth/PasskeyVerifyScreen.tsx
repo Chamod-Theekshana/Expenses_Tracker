@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import AppText from '../../components/AppText';
 import AppButton from '../../components/AppButton';
 import Card from '../../components/Card';
 import OTPInput from '../../components/OTPInput';
-import { colors, spacing } from '../../theme/colors';
+import { spacing } from '../../theme/colors';
 import { AuthService } from '../../services/AuthService';
+import { ThemeContext } from '../../store/theme';
 
 export default function PasskeyVerifyScreen({ route, navigation }: any) {
   const { email } = route.params;
+  const { colors } = useContext(ThemeContext);
 
   const [passkey, setPasskey] = useState('');
   const [loading, setLoading] = useState(false);
@@ -57,7 +59,7 @@ export default function PasskeyVerifyScreen({ route, navigation }: any) {
   };
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
       <AppText title style={{ marginBottom: 6 }}>
         Enter Passkey
       </AppText>
@@ -98,7 +100,6 @@ export default function PasskeyVerifyScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: colors.bg,
     padding: spacing.lg,
     paddingTop: 56,
   },

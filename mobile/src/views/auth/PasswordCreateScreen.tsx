@@ -4,14 +4,16 @@ import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
 import AppButton from '../../components/AppButton';
 import Card from '../../components/Card';
-import { colors, spacing } from '../../theme/colors';
+import { spacing } from '../../theme/colors';
 import { AuthService } from '../../services/AuthService';
 import { getFcmToken } from '../../services/PushNotificationService';
 import { AuthContext } from '../../store/auth';
+import { ThemeContext } from '../../store/theme';
 
 export default function PasswordCreateScreen({ route, navigation }: any) {
   const { email, signupToken } = route.params;
   const { setAuthToken } = useContext(AuthContext);
+  const { colors } = useContext(ThemeContext);
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -55,7 +57,7 @@ export default function PasswordCreateScreen({ route, navigation }: any) {
   };
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
       <AppText title style={{ marginBottom: 6 }}>
         Set Password
       </AppText>
@@ -74,7 +76,7 @@ export default function PasswordCreateScreen({ route, navigation }: any) {
           placeholder="Min 8 chars, 1 uppercase, 1 number"
           right={
             <Pressable onPress={() => setShowPassword((p) => !p)} hitSlop={10}>
-              <AppText style={{ color: colors.accent, fontWeight: '700' }}>
+              <AppText style={{ color: colors.accent, fontWeight: '600' }}>
                 {showPassword ? 'Hide' : 'Show'}
               </AppText>
             </Pressable>
@@ -93,7 +95,7 @@ export default function PasswordCreateScreen({ route, navigation }: any) {
           placeholder="Re-enter password"
           right={
             <Pressable onPress={() => setShowConfirm((p) => !p)} hitSlop={10}>
-              <AppText style={{ color: colors.accent, fontWeight: '700' }}>
+              <AppText style={{ color: colors.accent, fontWeight: '600' }}>
                 {showConfirm ? 'Hide' : 'Show'}
               </AppText>
             </Pressable>
@@ -102,13 +104,13 @@ export default function PasswordCreateScreen({ route, navigation }: any) {
 
         {password.length > 0 && (
           <View style={{ marginTop: 12 }}>
-            <AppText muted style={{ fontSize: 12 }}>
+            <AppText style={{ fontSize: 12, color: password.length >= 8 ? colors.success : colors.muted }}>
               {password.length >= 8 ? '✓' : '○'} At least 8 characters
             </AppText>
-            <AppText muted style={{ fontSize: 12 }}>
+            <AppText style={{ fontSize: 12, color: /[A-Z]/.test(password) ? colors.success : colors.muted }}>
               {/[A-Z]/.test(password) ? '✓' : '○'} 1 uppercase letter
             </AppText>
-            <AppText muted style={{ fontSize: 12 }}>
+            <AppText style={{ fontSize: 12, color: /[0-9]/.test(password) ? colors.success : colors.muted }}>
               {/[0-9]/.test(password) ? '✓' : '○'} 1 number
             </AppText>
           </View>
@@ -133,7 +135,6 @@ export default function PasswordCreateScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: colors.bg,
     padding: spacing.lg,
     paddingTop: 56,
   },

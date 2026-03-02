@@ -128,9 +128,9 @@ export default function ProfileScreen({ navigation }: any) {
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.bg }]} showsVerticalScrollIndicator={false}>
       <View style={styles.content}>
-        <AppText title style={{ fontSize: 28,marginBottom: 16 }}>
-        Profile
-      </AppText>
+        <AppText title style={{ fontSize: 28, marginBottom: 16 }}>
+          Profile
+        </AppText>
         <Card elevated>
           <View style={styles.header}>
             <CloudinaryPhotoPicker value={profilePhoto} onChange={onPhotoUploaded} />
@@ -209,24 +209,24 @@ export default function ProfileScreen({ navigation }: any) {
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
           <Pressable onPress={() => navigation.getParent()?.navigate('Budgets')}>
-            <View style={[styles.budgetBtn, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+            <View style={[styles.linkBtn, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
               <View>
                 <AppText style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>Manage Budgets</AppText>
                 <AppText muted style={{ fontSize: 12, marginTop: 2 }}>Set monthly spending limits per category</AppText>
               </View>
-              <AppText style={{ color: colors.accent, fontWeight: '800', fontSize: 16 }}>→</AppText>
+              <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 16 }}>→</AppText>
             </View>
           </Pressable>
 
           <View style={{ height: 10 }} />
 
           <Pressable onPress={() => navigation.getParent()?.navigate('Recurring')}>
-            <View style={[styles.budgetBtn, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+            <View style={[styles.linkBtn, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
               <View>
                 <AppText style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>Recurring Transactions</AppText>
                 <AppText muted style={{ fontSize: 12, marginTop: 2 }}>Auto-repeat daily, weekly, monthly expenses</AppText>
               </View>
-              <AppText style={{ color: colors.accent, fontWeight: '800', fontSize: 16 }}>→</AppText>
+              <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 16 }}>→</AppText>
             </View>
           </Pressable>
         </Card>
@@ -246,7 +246,7 @@ export default function ProfileScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    marginTop: scaleHeight(50)
+    marginTop: scaleHeight(50),
   },
   content: {
     padding: spacing.lg,
@@ -276,18 +276,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   divider: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     marginVertical: 16,
   },
   buttonRow: {
     flexDirection: 'row',
   },
-  budgetBtn: {
+  linkBtn: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 14,
-    borderRadius: 12,
+    borderRadius: radius.md,
     borderWidth: 1,
   },
 });

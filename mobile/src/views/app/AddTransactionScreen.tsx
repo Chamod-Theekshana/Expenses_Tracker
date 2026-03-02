@@ -81,7 +81,7 @@ export default function AddTransactionScreen({ navigation }: any) {
       <View style={styles.topRow}>
         <AppText title>Add</AppText>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '800' }}>Close</AppText>
+          <AppText style={{ color: colors.accent, fontWeight: '600' }}>Close</AppText>
         </Pressable>
       </View>
 
@@ -115,11 +115,11 @@ export default function AddTransactionScreen({ navigation }: any) {
         <View style={styles.chipsRow}>
           <Pressable onPress={() => setIsIncome(false)} style={[styles.chip, { backgroundColor: colors.surface2, borderColor: colors.border }, !isIncome && { backgroundColor: colors.danger, borderColor: 'transparent' }]}>
             <AppText style={{ fontSize: 18, marginBottom: 2 }}>↙</AppText>
-            <AppText style={{ fontWeight: '800', fontSize: 13, color: !isIncome ? '#fff' : colors.text }}>Expense</AppText>
+            <AppText style={{ fontWeight: '700', fontSize: 13, color: !isIncome ? '#FFF' : colors.text }}>Expense</AppText>
           </Pressable>
           <Pressable onPress={() => setIsIncome(true)} style={[styles.chip, { backgroundColor: colors.surface2, borderColor: colors.border }, isIncome && { backgroundColor: colors.success, borderColor: 'transparent' }]}>
             <AppText style={{ fontSize: 18, marginBottom: 2 }}>↗</AppText>
-            <AppText style={{ fontWeight: '800', fontSize: 13, color: isIncome ? '#fff' : colors.text }}>Income</AppText>
+            <AppText style={{ fontWeight: '700', fontSize: 13, color: isIncome ? '#FFF' : colors.text }}>Income</AppText>
           </Pressable>
         </View>
 
@@ -140,7 +140,7 @@ export default function AddTransactionScreen({ navigation }: any) {
                     onPress={() => setCategory(c)}
                     style={[styles.cat, { backgroundColor: colors.surface2, borderColor: colors.border }, category === c && { backgroundColor: colors.accent, borderColor: colors.accent }]}
                   >
-                    <AppText style={{ fontWeight: '700', fontSize: 14, color: category === c ? colors.bg : colors.text }}>{c}</AppText>
+                    <AppText style={{ fontWeight: '600', fontSize: 14, color: category === c ? '#FFF' : colors.text }}>{c}</AppText>
                   </Pressable>
                 ))}
             </View>
@@ -177,8 +177,8 @@ const styles = StyleSheet.create({
   chip: {
     flex: 1,
     height: 56,
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
+    borderRadius: radius.md,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -191,6 +191,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: radius.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
 });

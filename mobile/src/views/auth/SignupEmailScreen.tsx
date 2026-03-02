@@ -1,13 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useContext } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
 import AppButton from '../../components/AppButton';
 import Card from '../../components/Card';
-import { colors, spacing } from '../../theme/colors';
+import { spacing } from '../../theme/colors';
 import { AuthService } from '../../services/AuthService';
+import { ThemeContext } from '../../store/theme';
 
 export default function SignupEmailScreen({ navigation }: any) {
+  const { colors } = useContext(ThemeContext);
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -31,7 +33,7 @@ export default function SignupEmailScreen({ navigation }: any) {
   };
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
       <AppText title style={{ marginBottom: 6 }}>
         Create Account
       </AppText>
@@ -71,7 +73,6 @@ export default function SignupEmailScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: colors.bg,
     padding: spacing.lg,
     paddingTop: 56,
   },

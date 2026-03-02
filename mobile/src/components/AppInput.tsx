@@ -10,7 +10,7 @@ type Props = TextInputProps & {
 
 export default function AppInput({ left, right, style, ...props }: Props) {
   const { colors } = useContext(ThemeContext);
-  
+
   return (
     <View style={[styles.wrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       {left ? <View style={styles.side}>{left}</View> : null}
@@ -26,12 +26,12 @@ export default function AppInput({ left, right, style, ...props }: Props) {
 
 const styles = StyleSheet.create({
   wrap: {
-    height: 54,
+    height: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: 16,
     gap: 10,
   },
   side: {

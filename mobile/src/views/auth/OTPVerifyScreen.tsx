@@ -4,13 +4,15 @@ import AppText from '../../components/AppText';
 import AppButton from '../../components/AppButton';
 import Card from '../../components/Card';
 import OTPInput from '../../components/OTPInput';
-import { colors, spacing } from '../../theme/colors';
+import { spacing } from '../../theme/colors';
 import { OtpService } from '../../services/OtpService';
 import { AuthContext } from '../../store/auth';
+import { ThemeContext } from '../../store/theme';
 
 export default function OTPVerifyScreen({ route, navigation }: any) {
   const { email } = route.params;
   const { setAuthToken } = useContext(AuthContext);
+  const { colors } = useContext(ThemeContext);
 
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
@@ -59,7 +61,7 @@ export default function OTPVerifyScreen({ route, navigation }: any) {
   };
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
       <AppText title style={{ marginBottom: 6 }}>
         Enter Passkey
       </AppText>
@@ -100,7 +102,6 @@ export default function OTPVerifyScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: colors.bg,
     padding: spacing.lg,
     paddingTop: 56,
   },

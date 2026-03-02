@@ -16,15 +16,15 @@ const FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'] as const;
 function FrequencyBadge({ frequency, colors }: { frequency: string; colors: any }) {
   const badgeColors: Record<string, string> = {
     daily: '#FF6B6B',
-    weekly: '#4ECDC4',
-    monthly: '#45B7D1',
-    yearly: '#96CEB4',
+    weekly: '#2ED573',
+    monthly: '#6C5CE7',
+    yearly: '#00D9FF',
   };
   const bg = badgeColors[frequency] || colors.accent;
 
   return (
-    <View style={[styles.badge, { backgroundColor: bg + '22', borderColor: bg + '44' }]}>
-      <AppText style={{ fontSize: 11, fontWeight: '800', color: bg }}>
+    <View style={[styles.badge, { backgroundColor: bg + '18', borderColor: bg + '33' }]}>
+      <AppText style={{ fontSize: 11, fontWeight: '700', color: bg }}>
         {frequency.toUpperCase()}
       </AppText>
     </View>
@@ -130,7 +130,7 @@ export default function RecurringScreen({ navigation }: any) {
       <View style={styles.topRow}>
         <AppText title>Recurring</AppText>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '800' }}>Close</AppText>
+          <AppText style={{ color: colors.accent, fontWeight: '600' }}>Close</AppText>
         </Pressable>
       </View>
 
@@ -156,11 +156,11 @@ export default function RecurringScreen({ navigation }: any) {
             onPress={() => setIsIncome(!isIncome)}
             style={[
               styles.toggleBtn,
-              { backgroundColor: isIncome ? colors.success + '22' : colors.danger + '22',
+              { backgroundColor: isIncome ? colors.success + '18' : colors.danger + '18',
                 borderColor: isIncome ? colors.success : colors.danger },
             ]}
           >
-            <AppText style={{ fontWeight: '800', fontSize: 12, color: isIncome ? colors.success : colors.danger }}>
+            <AppText style={{ fontWeight: '700', fontSize: 12, color: isIncome ? colors.success : colors.danger }}>
               {isIncome ? 'Income' : 'Expense'}
             </AppText>
           </Pressable>
@@ -182,9 +182,9 @@ export default function RecurringScreen({ navigation }: any) {
             >
               <AppText
                 style={{
-                  fontWeight: '700',
+                  fontWeight: '600',
                   fontSize: 12,
-                  color: frequency === f ? colors.bg : colors.text,
+                  color: frequency === f ? '#FFF' : colors.text,
                 }}
               >
                 {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -209,9 +209,9 @@ export default function RecurringScreen({ navigation }: any) {
             >
               <AppText
                 style={{
-                  fontWeight: '700',
+                  fontWeight: '600',
                   fontSize: 12,
-                  color: selectedCat === c.name ? colors.bg : colors.text,
+                  color: selectedCat === c.name ? '#FFF' : colors.text,
                 }}
               >
                 {c.name}
@@ -242,7 +242,7 @@ export default function RecurringScreen({ navigation }: any) {
           </Card>
         )}
         renderItem={({ item }) => {
-          const nextDate = new Date().toLocaleDateString() ;
+          const nextDate = new Date().toLocaleDateString();
           const isExpense = item.amount < 0;
 
           return (
@@ -250,19 +250,19 @@ export default function RecurringScreen({ navigation }: any) {
               <View
                 style={[
                   styles.ruleRow,
-                  { backgroundColor: colors.surface2, borderColor: colors.border },
+                  { backgroundColor: colors.surface, borderColor: colors.border },
                   !item.is_active && { opacity: 0.5 },
                 ]}
               >
                 <View style={styles.ruleHeader}>
                   <View style={{ flex: 1 }}>
-                    <AppText style={{ fontWeight: '800', fontSize: 15 }}>{item.title}</AppText>
+                    <AppText style={{ fontWeight: '700', fontSize: 15 }}>{item.title}</AppText>
                     <AppText muted style={{ fontSize: 12, marginTop: 2 }}>{item.category}</AppText>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
                     <AppText
                       style={{
-                        fontWeight: '800',
+                        fontWeight: '700',
                         fontSize: 15,
                         color: isExpense ? colors.danger : colors.success,
                       }}
@@ -284,7 +284,7 @@ export default function RecurringScreen({ navigation }: any) {
                     <Switch
                       value={item.is_active}
                       onValueChange={() => toggleActive(item)}
-                      trackColor={{ false: colors.surface, true: colors.accent + '66' }}
+                      trackColor={{ false: colors.surface2, true: colors.accent + '55' }}
                       thumbColor={item.is_active ? colors.accent : colors.muted}
                     />
                   </View>
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: radius.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   freqRow: {
     flexDirection: 'row',
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     borderRadius: radius.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
     alignItems: 'center',
   },
   catWrap: {
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: radius.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   badge: {
     paddingHorizontal: 8,
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   ruleRow: {
     padding: 16,
     borderRadius: radius.lg,
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   ruleHeader: {
     flexDirection: 'row',
@@ -367,6 +367,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
     paddingTop: 10,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

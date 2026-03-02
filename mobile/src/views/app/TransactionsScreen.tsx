@@ -104,7 +104,7 @@ export default function TransactionsScreen() {
 
       {/* Search Bar */}
       <View style={[styles.searchWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <AppText style={{ fontSize: 16 }}>🔍</AppText>
+        <AppText style={{ fontSize: 16, color: colors.muted }}>🔍</AppText>
         <TextInput
           value={search}
           onChangeText={setSearch}
@@ -125,7 +125,7 @@ export default function TransactionsScreen() {
         {TYPE_FILTERS.map((type) => {
           const active = typeFilter === type;
           const chipColor =
-            type === 'Expense' ? '#FF6B6B' : type === 'Income' ? '#4DFF88' : colors.accent;
+            type === 'Expense' ? colors.danger : type === 'Income' ? colors.success : colors.accent;
           return (
             <Pressable
               key={type}
@@ -138,9 +138,9 @@ export default function TransactionsScreen() {
             >
               <AppText
                 style={{
-                  fontWeight: '800',
+                  fontWeight: '600',
                   fontSize: 13,
-                  color: active ? '#000' : colors.text,
+                  color: active ? '#FFF' : colors.text,
                 }}
               >
                 {type}
@@ -154,7 +154,7 @@ export default function TransactionsScreen() {
           onPress={() => setSortNewest(!sortNewest)}
           style={[styles.sortBtn, { backgroundColor: colors.surface2, borderColor: colors.border }]}
         >
-          <AppText style={{ fontWeight: '700', fontSize: 12, color: colors.text }}>
+          <AppText style={{ fontWeight: '600', fontSize: 12, color: colors.text }}>
             {sortNewest ? '↓ Newest' : '↑ Oldest'}
           </AppText>
         </Pressable>
@@ -162,42 +162,40 @@ export default function TransactionsScreen() {
 
       {/* Category Chips */}
       {categories.length > 0 && (
-        
-        <View >
-          <ScrollView horizontal style={styles.catWrap}>
-          {categories.map((cat) => {
-            const active = selectedCategory === cat;
-            return (
-              <Pressable
-                key={cat}
-                onPress={() => setSelectedCategory(active ? '' : cat)}
-                style={[
-                  styles.catChip,
-                  { backgroundColor: colors.surface2, borderColor: colors.border },
-                  active && { backgroundColor: colors.accent, borderColor: colors.accent },
-                ]}
-              >
-                <AppText
-                  style={{
-                    fontWeight: '700',
-                    fontSize: 12,
-                    color: active ? colors.bg : colors.text,
-                  }}
+        <View>
+          <ScrollView horizontal style={styles.catWrap} showsHorizontalScrollIndicator={false}>
+            {categories.map((cat) => {
+              const active = selectedCategory === cat;
+              return (
+                <Pressable
+                  key={cat}
+                  onPress={() => setSelectedCategory(active ? '' : cat)}
+                  style={[
+                    styles.catChip,
+                    { backgroundColor: colors.surface2, borderColor: colors.border },
+                    active && { backgroundColor: colors.accent, borderColor: colors.accent },
+                  ]}
                 >
-                  {cat}
-                </AppText>
-              </Pressable>
-            );
-          })}
-           </ScrollView>
+                  <AppText
+                    style={{
+                      fontWeight: '600',
+                      fontSize: 12,
+                      color: active ? '#FFF' : colors.text,
+                    }}
+                  >
+                    {cat}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
-       
       )}
 
       {/* Clear Filters */}
       {hasFilters && (
         <Pressable onPress={clearFilters} style={styles.clearBtn}>
-          <AppText style={{ color: colors.accent, fontWeight: '800', fontSize: 13 }}>
+          <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>
             ✕ Clear filters
           </AppText>
         </Pressable>
@@ -206,13 +204,13 @@ export default function TransactionsScreen() {
       {/* Action Row */}
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 10 }}>
         <Pressable onPress={() => navigation.navigate('Categories')} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '800' }}>Manage Categories</AppText>
+          <AppText style={{ color: colors.accent, fontWeight: '600' }}>Manage Categories</AppText>
         </Pressable>
       </View>
 
       {loading ? (
         <View style={{ paddingTop: 30 }}>
-          <ActivityIndicator />
+          <ActivityIndicator color={colors.accent} />
         </View>
       ) : null}
 
@@ -227,7 +225,7 @@ export default function TransactionsScreen() {
                 <AppText style={{ fontSize: 28, marginBottom: 8 }}>🔍</AppText>
                 <AppText muted>No transactions match your filters.</AppText>
                 <Pressable onPress={clearFilters} style={{ marginTop: 12 }}>
-                  <AppText style={{ color: colors.accent, fontWeight: '800' }}>Clear filters</AppText>
+                  <AppText style={{ color: colors.accent, fontWeight: '600' }}>Clear filters</AppText>
                 </Pressable>
               </>
             ) : (
@@ -273,8 +271,8 @@ const styles = StyleSheet.create({
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
+    borderRadius: radius.md,
+    borderWidth: 1,
     paddingHorizontal: 14,
     height: 48,
     gap: 10,
@@ -294,14 +292,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: radius.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   sortBtn: {
     marginLeft: 'auto',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: radius.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   catWrap: {
     flexDirection: 'row',
@@ -311,8 +309,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: radius.md,
-    borderWidth: 1.5,
-    marginRight:8
+    borderWidth: 1,
+    marginRight: 8,
   },
   clearBtn: {
     alignSelf: 'flex-start',

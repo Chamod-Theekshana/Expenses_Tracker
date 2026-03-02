@@ -3,12 +3,14 @@ import { View, StyleSheet, Alert, Pressable } from 'react-native';
 import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
 import AppButton from '../../components/AppButton';
-import { colors, spacing } from '../../theme/colors';
+import { spacing } from '../../theme/colors';
 import { AuthContext } from '../../store/auth';
 import Card from '../../components/Card';
+import { ThemeContext } from '../../store/theme';
 
 export default function SignUpScreen({ navigation }: any) {
   const { signUp } = useContext(AuthContext);
+  const { colors } = useContext(ThemeContext);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,7 +37,7 @@ export default function SignUpScreen({ navigation }: any) {
   };
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
       <AppText title style={{ marginBottom: 6 }}>
         Create account
       </AppText>
@@ -80,7 +82,7 @@ export default function SignUpScreen({ navigation }: any) {
 
       <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
         <AppText muted>
-          Already have an account? <AppText style={{ color: colors.accent, fontWeight: '700' }}>Sign in</AppText>
+          Already have an account? <AppText style={{ color: colors.accent, fontWeight: '600' }}>Sign in</AppText>
         </AppText>
       </Pressable>
     </View>
@@ -90,7 +92,6 @@ export default function SignUpScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: colors.bg,
     padding: spacing.lg,
     paddingTop: 56,
   },

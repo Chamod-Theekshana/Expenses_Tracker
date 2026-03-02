@@ -9,7 +9,7 @@ import { ThemeContext } from '../store/theme';
 import AuthStack from './AuthStack';
 import AppStack from './AppStack';
 import SplashScreen from '../views/SplashScreen';
-import { colors } from '../theme/colors';
+// colors imported below via ThemeContext
 import { ProfileService } from '../services/ProfileService';
 
 import { NotificationsProvider, NotificationsContext } from '../store/notifications';
@@ -23,7 +23,7 @@ function RootNavigatorInner() {
   const { userEmail, isLoading, userId, token } = useContext(AuthContext);
   const { fetchTransactions, clearTransactions } = useContext(TransactionsContext);
   const { loadProfile, clearProfile } = useContext(ProfileContext);
-  const { setTheme } = useContext(ThemeContext);
+  const { setTheme, colors } = useContext(ThemeContext);
   const { show } = useContext(NotificationsContext);
 
   const [showSplash, setShowSplash] = useState(true);

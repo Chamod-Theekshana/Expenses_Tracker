@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { View, StyleSheet, FlatList, Pressable, Image, ScrollView } from 'react-native';
+import { View, StyleSheet, Pressable, Image, ScrollView, Dimensions } from 'react-native';
+import Svg, { Circle, Polyline, Defs, LinearGradient, Stop } from 'react-native-svg';
 import AppText from '../../components/AppText';
 import Card from '../../components/Card';
 import { spacing, radius } from '../../theme/colors';
@@ -7,11 +8,110 @@ import { TransactionsContext } from '../../store/transactions';
 import { AuthContext } from '../../store/auth';
 import { ProfileContext } from '../../store/profile';
 import { formatMoney } from '../../utils/money';
-import TransactionItem from '../../components/TransactionItem';
 import { scaleHeight } from '../../constants/size';
 import { ThemeContext } from '../../store/theme';
 import { images } from '../../constants/images';
 import { BudgetService, BudgetStatus } from '../../services/BudgetService';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// ── Tiny sparkline component ──────────────────────────────────
+function MiniSparkline({ data, color, width = 80, height = 36 }: { data: number[]; color: string; width?: number; height?: number }) {
+  if (data.length < 2) return null;
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+  const points = data
+    .map((v, i) => {
+      const x = (i / (data.length - 1)) * width;
+      const y = height - ((v - min) / range) * (height - 4) - 2;
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  return (
+    <Svg width={width} height={height}>
+      <Polyline
+        points={points}
+        fill="none"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+// ── Circular progress ring ──────────────────────────────────
+function CircularProgress({
+  percentage,
+  size = 70,
+  strokeWidth = 7,
+  trackColor,
+  progressColor,
+}: {
+  percentage: number;
+  size?: number;
+  strokeWidth?: number;
+  trackColor: string;
+  progressColor: string;
+}) {
+  const r = (size - strokeWidth) / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const circumference = 2 * Math.PI * r;
+  const clampedPct = Math.min(percentage, 100);
+  const strokeDashoffset = circumference - (clampedPct / 100) * circumference;
+
+  return (
+    <Svg width={size} height={size}>
+      {/* Track */}
+      <Circle
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill="none"
+        stroke={trackColor}
+        strokeWidth={strokeWidth}
+      />
+      {/* Progress */}
+      <Circle
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill="none"
+        stroke={progressColor}
+        strokeWidth={strokeWidth}
+        strokeDasharray={`${circumference}`}
+        strokeDashoffset={strokeDashoffset}
+        strokeLinecap="round"
+        rotation="-90"
+        origin={`${cx}, ${cy}`}
+      />
+    </Svg>
+  );
+}
+
+// ── Category color helper ─────────────────────────────────
+const CATEGORY_COLORS: Record<string, string> = {
+  Food: '#FF6B6B',
+  Transport: '#6C5CE7',
+  Bills: '#00D9FF',
+  Shopping: '#FFAA00',
+  Health: '#2ED573',
+  Entertainment: '#FF9FF3',
+  Education: '#54A0FF',
+  Income: '#2ED573',
+  Other: '#A29BFE',
+  Groceries: '#FF9F43',
+  Rent: '#EE5A24',
+  Salary: '#2ED573',
+};
+
+function getCategoryColor(category: string): string {
+  return CATEGORY_COLORS[category] || '#6C5CE7';
+}
 
 export default function HomeScreen({ navigation }: any) {
   const { items } = useContext(TransactionsContext);
@@ -20,13 +120,28 @@ export default function HomeScreen({ navigation }: any) {
   const { colors } = useContext(ThemeContext);
 
   const [allBudgets, setAllBudgets] = useState<BudgetStatus[]>([]);
-  const [budgetAlerts, setBudgetAlerts] = useState<BudgetStatus[]>([]);
 
   const stats = useMemo(() => {
     const income = items.filter(t => t.amount > 0).reduce((a, b) => a + b.amount, 0);
     const expense = items.filter(t => t.amount < 0).reduce((a, b) => a + b.amount, 0);
     const balance = income + expense;
     return { income, expense, balance };
+  }, [items]);
+
+  // Build sparkline data from last 7 days of balances
+  const sparklineData = useMemo(() => {
+    if (items.length === 0) return [0, 0];
+    const sorted = [...items].sort(
+      (a, b) => new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime(),
+    );
+    let running = 0;
+    const points: number[] = [];
+    sorted.forEach((t) => {
+      running += t.amount;
+      points.push(running);
+    });
+    // Take last 8 points or all if fewer
+    return points.length > 8 ? points.slice(-8) : points;
   }, [items]);
 
   const recent = items.slice(0, 5);
@@ -37,21 +152,21 @@ export default function HomeScreen({ navigation }: any) {
       try {
         const statuses = await BudgetService.getStatus();
         setAllBudgets(statuses);
-        setBudgetAlerts(statuses.filter(b => b.percentage >= 70));
       } catch {
-        // silently fail — budgets are supplementary
+        // silently fail
       }
     })();
-  }, [items]); // Re-fetch when transactions change
+  }, [items]);
 
   return (
     <ScrollView style={[styles.wrap, { backgroundColor: colors.bg }]} showsVerticalScrollIndicator={false}>
-      <View style={[styles.profileHeader, { backgroundColor: colors.surface }]}>
+      {/* ─── Profile Header ─── */}
+      <View style={[styles.profileHeader, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {profilePhoto ? (
           <Image source={{ uri: profilePhoto }} style={styles.profileImage} />
         ) : (
           <View style={[styles.profilePlaceholder, { backgroundColor: colors.accent }]}>
-            <AppText style={[styles.profileInitial, { color: colors.bg }]}>{name.charAt(0).toUpperCase() || 'U'}</AppText>
+            <AppText style={styles.profileInitial}>{name.charAt(0).toUpperCase() || 'U'}</AppText>
           </View>
         )}
         <View style={styles.profileInfo}>
@@ -60,139 +175,205 @@ export default function HomeScreen({ navigation }: any) {
         </View>
       </View>
 
-      <Card elevated style={{ marginTop: 20 }}>
-        <AppText muted style={{ fontSize: 13 }}>Total Balance</AppText>
-        <AppText title mono style={{ marginTop: 10, fontSize: 36 }}>
-          {formatMoney(stats.balance)}
-        </AppText>
-
-        <View style={{ flexDirection: 'row', alignSelf: 'center', gap: 12, marginTop: 20 }}>
-          <View style={[styles.pill, { backgroundColor: 'rgba(77,255,136,0.12)', borderColor: 'rgba(77,255,136,0.3)' }]}>
-
-            <View style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
-              <View style={styles.pillIcon}>
-                <Image source={images.income} style={styles.Image} />
-              </View>
-              <AppText muted style={{ fontSize: 12 }}>Income</AppText>
-            </View>
-
-            <AppText mono style={{ marginTop: 4, fontWeight: '800', fontSize: 16, color: colors.success }}>
-              {formatMoney(stats.income)}
+      {/* ─── Balance Card with Sparkline ─── */}
+      <View style={[styles.balanceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.balanceTop}>
+          <View>
+            <AppText muted style={{ fontSize: 13, fontWeight: '500' }}>Total Balance</AppText>
+            <AppText style={[styles.balanceAmount, { color: colors.text }]}>
+              {formatMoney(stats.balance)}
             </AppText>
-
           </View>
-          <View style={[styles.pill, { backgroundColor: 'rgba(255,77,77,0.10)', borderColor: 'rgba(255,77,77,0.3)' }]}>
-
-            <View style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}>
-              <View style={styles.pillIcon}>
-                <Image source={images.expense} style={styles.Image} />
-              </View>
-              <AppText muted style={{ fontSize: 12 }}>Expense</AppText>
-            </View>
-
-            <AppText mono style={{ marginTop: 4, fontWeight: '800', fontSize: 16 }}>
-              {formatMoney(stats.expense)}
-            </AppText>
-
+          <View style={styles.sparklineWrap}>
+            <MiniSparkline data={sparklineData} color={stats.balance >= 0 ? colors.success : colors.danger} width={90} height={40} />
           </View>
         </View>
-      </Card>
 
-      {/* Budgets Section — always visible */}
+        {/* Income / Expense Pills */}
+        <View style={styles.pillRow}>
+          <View style={[styles.pill, { backgroundColor: 'rgba(46,213,115,0.12)' }]}>
+            <View style={[styles.pillDot, { backgroundColor: colors.success }]}>
+              <AppText style={{ fontSize: 10, color: '#FFF' }}>↗</AppText>
+            </View>
+            <AppText muted style={{ fontSize: 11, marginLeft: 6 }}>Income</AppText>
+            <AppText mono style={[styles.pillAmount, { color: colors.success }]}>
+              {formatMoney(stats.income)}
+            </AppText>
+          </View>
+          <View style={[styles.pill, { backgroundColor: 'rgba(255,107,107,0.12)' }]}>
+            <View style={[styles.pillDot, { backgroundColor: colors.danger }]}>
+              <AppText style={{ fontSize: 10, color: '#FFF' }}>↙</AppText>
+            </View>
+            <AppText muted style={{ fontSize: 11, marginLeft: 6 }}>Expense</AppText>
+            <AppText mono style={[styles.pillAmount, { color: colors.danger }]}>
+              {formatMoney(stats.expense)}
+            </AppText>
+          </View>
+        </View>
+      </View>
+
+      {/* ─── Budget Overview (horizontal scroll with rings) ─── */}
       <View style={styles.sectionRow}>
-        <AppText style={{ fontWeight: '800', fontSize: 17 }}>Budgets</AppText>
+        <AppText style={styles.sectionTitle}>Budget Overview</AppText>
         <Pressable onPress={() => navigation.getParent()?.navigate('Budgets')} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '800', fontSize: 14 }}>Manage →</AppText>
+          <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>Manage →</AppText>
         </Pressable>
       </View>
 
       {allBudgets.length > 0 ? (
-        budgetAlerts.length > 0 ? (
-          <>
-            {budgetAlerts.map((b) => {
-              const barColor = b.percentage >= 100 ? colors.danger : b.percentage >= 80 ? '#FFAA00' : colors.success;
-              const clampedPct = Math.min(b.percentage, 100);
-              return (
-                <Card key={b.id} style={{ marginBottom: 10 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <AppText style={{ fontWeight: '700', fontSize: 14 }}>{b.category}</AppText>
-                    <AppText style={{ fontWeight: '800', fontSize: 13, color: barColor }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.budgetScroll}
+        >
+          {allBudgets.map((b) => {
+            const isOver = b.percentage >= 100;
+            const isWarning = b.percentage >= 80;
+            const ringColor = isOver ? colors.danger : isWarning ? colors.warning : colors.success;
+            const clampedPct = Math.min(b.percentage, 100);
+
+            return (
+              <View
+                key={b.id}
+                style={[styles.budgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
+                <View style={styles.budgetCardHeader}>
+                  <AppText style={{ fontWeight: '600', fontSize: 14, flex: 1 }} numberOfLines={1}>
+                    {b.category}
+                  </AppText>
+                  {isOver && <AppText style={{ fontSize: 14 }}>⚠️</AppText>}
+                </View>
+                <View style={styles.budgetRingRow}>
+                  <CircularProgress
+                    percentage={clampedPct}
+                    size={64}
+                    strokeWidth={6}
+                    trackColor={colors.surface2}
+                    progressColor={ringColor}
+                  />
+                  <View style={styles.budgetStats}>
+                    <AppText style={{ fontWeight: '800', fontSize: 16, color: ringColor }}>
                       {b.percentage}%
                     </AppText>
+                    <AppText muted style={{ fontSize: 10, marginTop: 2 }}>
+                      {isOver ? 'Overspend' : 'Used'}
+                    </AppText>
                   </View>
-                  <View style={[styles.budgetTrack, { backgroundColor: colors.surface2, marginTop: 8 }]}>
-                    <View
-                      style={{
-                        height: '100%',
-                        width: `${clampedPct}%`,
-                        backgroundColor: barColor,
-                        borderRadius: 4,
-                      }}
-                    />
-                  </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-                    <AppText muted style={{ fontSize: 11 }}>{formatMoney(b.spent)} spent</AppText>
-                    <AppText muted style={{ fontSize: 11 }}>{formatMoney(b.amount)} limit</AppText>
-                  </View>
-                </Card>
-              );
-            })}
-          </>
-        ) : (
-          <Card style={{ alignItems: 'center', paddingVertical: 16 }}>
-            <AppText style={{ fontSize: 14, color: colors.success, fontWeight: '700' }}>✅ All budgets on track</AppText>
-            <AppText muted style={{ fontSize: 12, marginTop: 4 }}>{allBudgets.length} budget{allBudgets.length > 1 ? 's' : ''} within limits</AppText>
-          </Card>
-        )
+                </View>
+                <AppText muted style={{ fontSize: 10, marginTop: 8 }}>
+                  {formatMoney(b.spent)} / {formatMoney(b.amount)} limit
+                </AppText>
+              </View>
+            );
+          })}
+        </ScrollView>
       ) : (
         <Pressable onPress={() => navigation.getParent()?.navigate('Budgets')}>
-          <Card style={{ alignItems: 'center', paddingVertical: 20 }}>
+          <View style={[styles.emptyBudgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <AppText style={{ fontSize: 28, marginBottom: 6 }}>💰</AppText>
-            <AppText style={{ fontWeight: '700', fontSize: 14 }}>No budgets set yet</AppText>
+            <AppText style={{ fontWeight: '600', fontSize: 14 }}>No budgets set yet</AppText>
             <AppText muted style={{ fontSize: 12, marginTop: 4, textAlign: 'center' }}>
-              Set monthly limits per category to track your spending
+              Set monthly limits per category to track spending
             </AppText>
-            <AppText style={{ color: colors.accent, fontWeight: '800', fontSize: 13, marginTop: 10 }}>
+            <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13, marginTop: 10 }}>
               + Set Budget
             </AppText>
-          </Card>
+          </View>
         </Pressable>
       )}
 
-      {/* Recurring Section */}
-      <View style={styles.sectionRow}>
-        <AppText style={{ fontWeight: '800', fontSize: 17 }}>Recurring</AppText>
-        <Pressable onPress={() => navigation.getParent()?.navigate('Recurring')} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '800', fontSize: 14 }}>Manage →</AppText>
-        </Pressable>
-      </View>
+      {/* ─── Auto-repeat (Recurring) ─── */}
       <Pressable onPress={() => navigation.getParent()?.navigate('Recurring')}>
-        <Card style={{ alignItems: 'center', paddingVertical: 16 }}>
-          <AppText style={{ fontSize: 24, marginBottom: 4 }}>🔄</AppText>
-          <AppText style={{ fontWeight: '700', fontSize: 13 }}>Auto-repeat transactions</AppText>
-          <AppText muted style={{ fontSize: 12, marginTop: 4, textAlign: 'center' }}>
+        <View style={[styles.recurringCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <AppText style={{ fontSize: 28, marginBottom: 6 }}>🔄</AppText>
+          <AppText style={{ fontWeight: '700', fontSize: 15 }}>Auto-repeat transactions</AppText>
+          <AppText muted style={{ fontSize: 12, marginTop: 4, textAlign: 'center', lineHeight: 18 }}>
             Set up daily, weekly, monthly or yearly recurring expenses & income
           </AppText>
-          <AppText style={{ color: colors.accent, fontWeight: '800', fontSize: 13, marginTop: 8 }}>
+          <AppText style={{ color: colors.accent, fontWeight: '700', fontSize: 14, marginTop: 10 }}>
             + Add Recurring
           </AppText>
-        </Card>
+          <AppText muted style={{ fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>
+            e.g., Rent, Netflix, Gym
+          </AppText>
+        </View>
       </Pressable>
 
+      {/* ─── Recent Transactions ─── */}
       <View style={styles.sectionRow}>
-        <AppText style={{ fontWeight: '800', fontSize: 17 }}>Recent Transactions</AppText>
+        <AppText style={styles.sectionTitle}>Recent Transactions</AppText>
         <Pressable onPress={() => navigation.navigate('Transactions')} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '800', fontSize: 14 }}>View all →</AppText>
+          <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>View all →</AppText>
         </Pressable>
       </View>
 
-      {recent.map((item) => (
-        <View key={item.id} style={{ marginBottom: 10 }}>
-          <TransactionItem item={item} onPress={() => navigation.navigate('Transactions')} />
-        </View>
-      ))}
+      {recent.length > 0 ? (
+        recent.map((item) => {
+          const isIncome = item.amount > 0;
+          const catColor = getCategoryColor(item.category);
+          const dateObj = new Date(item.dateISO);
+          const timeStr = dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+          const isToday =
+            new Date().toDateString() === dateObj.toDateString();
+          const isYesterday =
+            new Date(Date.now() - 86400000).toDateString() === dateObj.toDateString();
+          const dayLabel = isToday
+            ? 'Today'
+            : isYesterday
+            ? 'Yesterday'
+            : dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-      <View style={{ height: 28 }} />
+          return (
+            <Pressable
+              key={item.id}
+              onPress={() => navigation.navigate('Transactions')}
+              style={({ pressed }) => [
+                styles.txRow,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              {/* Category icon circle */}
+              <View style={[styles.txIcon, { backgroundColor: catColor + '20' }]}>
+                <AppText style={{ fontSize: 14, fontWeight: '800', color: catColor }}>
+                  {item.category.charAt(0).toUpperCase()}
+                </AppText>
+              </View>
+
+              {/* Title + Category + Date */}
+              <View style={styles.txInfo}>
+                <AppText style={{ fontWeight: '600', fontSize: 15, color: colors.text }}>
+                  {item.title}
+                </AppText>
+                <AppText muted style={{ fontSize: 12, marginTop: 2 }}>
+                  {item.category}
+                </AppText>
+                <AppText muted style={{ fontSize: 11, marginTop: 1 }}>
+                  {dayLabel}, {timeStr}
+                </AppText>
+              </View>
+
+              {/* Amount */}
+              <AppText
+                mono
+                style={{
+                  fontWeight: '700',
+                  fontSize: 15,
+                  color: isIncome ? colors.success : colors.text,
+                }}
+              >
+                {formatMoney(item.amount)}
+              </AppText>
+            </Pressable>
+          );
+        })
+      ) : (
+        <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+          <AppText muted>No transactions yet. Tap + to add one.</AppText>
+        </View>
+      )}
+
+      <View style={{ height: scaleHeight(60) }} />
     </ScrollView>
   );
 }
@@ -201,87 +382,177 @@ const styles = StyleSheet.create({
   wrap: {
     flex: 1,
     padding: spacing.lg,
-    marginTop: scaleHeight(50),
+    paddingTop: scaleHeight(55),
   },
+
+  // ── Profile Header ──
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: scaleHeight(20),
-    padding: spacing.md,
+    padding: 14,
     borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   profileImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
   },
   profilePlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
   },
   profileInitial: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
+    color: '#FFF',
   },
   profileInfo: {
-    marginLeft: spacing.md,
+    marginLeft: 14,
     flex: 1,
   },
   greeting: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
   },
   email: {
     fontSize: 12,
     marginTop: 2,
   },
-  addBtn: {
-    width: 44,
-    height: 44,
+
+  // ── Balance Card ──
+  balanceCard: {
+    marginTop: 18,
+    padding: 20,
     borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  balanceTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  balanceAmount: {
+    fontSize: 32,
+    fontWeight: '800',
+    marginTop: 8,
+    paddingVertical:3,
+    letterSpacing: -0.5,
+    fontVariant: ['tabular-nums'] as any,
+  },
+  sparklineWrap: {
+    marginTop: 8,
+    opacity: 0.9,
+  },
+
+  // ── Income / Expense Pills ──
+  pillRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
   },
   pill: {
-    borderRadius: radius.lg,
-    padding: 14,
-    borderWidth: 1,
-    justifyContent: 'center',
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: radius.md,
+    flexWrap: 'wrap',
   },
-  pillIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+  pillDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  pillAmount: {
+    fontWeight: '700',
+    fontSize: 14,
+    marginTop: 4,
+    width: '100%',
+    paddingLeft: 28,
+  },
+
+  // ── Section Headers ──
   sectionRow: {
-    marginTop: 24,
-    marginBottom: 16,
+    marginTop: 26,
+    marginBottom: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  budgetTrack: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
+  sectionTitle: {
+    fontWeight: '700',
+    fontSize: 18,
   },
-  Image: {
-    width: 38,
-    height: 38,
-    tintColor: '#FFFF',
-    resizeMode: 'contain'
-  }
+
+  // ── Budget Cards ──
+  budgetScroll: {
+    paddingRight: 20,
+    gap: 12,
+  },
+  budgetCard: {
+    width: (SCREEN_WIDTH - 56) / 2,
+    padding: 14,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  budgetCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  budgetRingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  budgetStats: {
+    flex: 1,
+  },
+  emptyBudgetCard: {
+    alignItems: 'center',
+    paddingVertical: 22,
+    paddingHorizontal: 16,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+
+  // ── Recurring Card ──
+  recurringCard: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginTop: 18,
+  },
+
+  // ── Transaction Rows ──
+  txRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 10,
+    gap: 14,
+  },
+  txIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  txInfo: {
+    flex: 1,
+  },
 });

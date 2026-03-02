@@ -1,14 +1,18 @@
-import React, { useEffect } from 'react';
+import React, { useContext, useEffect } from 'react';
 import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import messaging from '@react-native-firebase/messaging';
 import RootNavigator from './src/navigation/RootNavigator';
 import { AuthProvider } from './src/store/auth';
 import { TransactionsProvider } from './src/store/transactions';
-import { ThemeProvider } from './src/store/theme';
+import { ThemeProvider, ThemeContext } from './src/store/theme';
 import { ProfileProvider } from './src/store/profile';
-import { colors } from './src/theme/colors';
 import { requestPushPermission, ensureNotifChannel, showLocalNotification } from './src/services/PushNotificationService';
+
+function ThemedStatusBar() {
+  const { theme, colors } = useContext(ThemeContext);
+  return <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.bg} />;
+}
 
 export default function App() {
   // Request notification permission on app open (before login)
@@ -45,7 +49,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+        <ThemedStatusBar />
         <AuthProvider>
           <ProfileProvider>
             <TransactionsProvider>
@@ -57,4 +61,3 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
-

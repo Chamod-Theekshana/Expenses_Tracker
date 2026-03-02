@@ -1,6 +1,7 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useContext } from 'react';
 import { View, TextInput, StyleSheet } from 'react-native';
-import { colors, radius } from '../theme/colors';
+import { radius } from '../theme/colors';
+import { ThemeContext } from '../store/theme';
 
 type Props = {
   value: string;
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export default function OTPInput({ value, onChangeText, editable = true }: Props) {
+  const { colors } = useContext(ThemeContext);
   const inputs = useRef<(TextInput | null)[]>([]);
 
   const handleChange = (text: string, index: number) => {
@@ -34,7 +36,18 @@ export default function OTPInput({ value, onChangeText, editable = true }: Props
         <TextInput
           key={i}
           ref={(ref) => { inputs.current[i] = ref; }}
-          style={[styles.input, value[i] && styles.filled]}
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              color: colors.text,
+            },
+            value[i] && {
+              borderColor: colors.accent,
+              backgroundColor: colors.accentBg,
+            },
+          ]}
           maxLength={1}
           keyboardType="number-pad"
           value={value[i] || ''}
@@ -56,18 +69,11 @@ const styles = StyleSheet.create({
   },
   input: {
     width: 50,
-    height: 50,
+    height: 54,
     borderRadius: radius.md,
-    borderWidth: 2,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderWidth: 1.5,
     textAlign: 'center',
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    color: colors.text,
-  },
-  filled: {
-    borderColor: colors.accent,
-    backgroundColor: colors.surface2,
   },
 });

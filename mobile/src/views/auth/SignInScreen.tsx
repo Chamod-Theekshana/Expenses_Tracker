@@ -3,13 +3,15 @@ import { View, StyleSheet, Alert, Pressable } from 'react-native';
 import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
 import AppButton from '../../components/AppButton';
-import { colors, spacing } from '../../theme/colors';
+import { spacing } from '../../theme/colors';
 import { AuthContext } from '../../store/auth';
 import Card from '../../components/Card';
 import { scaleHeight } from '../../constants/size';
+import { ThemeContext } from '../../store/theme';
 
 export default function SignInScreen({ navigation }: any) {
   const { signIn } = useContext(AuthContext);
+  const { colors } = useContext(ThemeContext);
 
   const [email, setEmail] = useState('demo@pulsespend.app');
   const [password, setPassword] = useState('123456');
@@ -34,7 +36,7 @@ export default function SignInScreen({ navigation }: any) {
   };
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
       <AppText title style={{ marginBottom: 6 }}>
         Welcome back
       </AppText>
@@ -66,7 +68,7 @@ export default function SignInScreen({ navigation }: any) {
           placeholder="••••••"
           right={
             <Pressable onPress={() => setShow((p) => !p)} hitSlop={10}>
-              <AppText style={{ color: colors.accent, fontWeight: '700' }}>
+              <AppText style={{ color: colors.accent, fontWeight: '600' }}>
                 {show ? 'Hide' : 'Show'}
               </AppText>
             </Pressable>
@@ -85,7 +87,7 @@ export default function SignInScreen({ navigation }: any) {
       <View style={styles.footer}>
         <Pressable onPress={() => navigation.navigate('SignupEmail')} hitSlop={10}>
           <AppText muted>
-            New here? <AppText style={{ color: colors.accent, fontWeight: '700' }}>Create account</AppText>
+            New here? <AppText style={{ color: colors.accent, fontWeight: '600' }}>Create account</AppText>
           </AppText>
         </Pressable>
       </View>
@@ -96,7 +98,6 @@ export default function SignInScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: colors.bg,
     padding: spacing.lg,
     paddingTop: 56,
   },

@@ -30,7 +30,15 @@ export default function AppButton({
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.base,
-        variant === 'primary' && { backgroundColor: colors.accent, borderColor: 'transparent' },
+        variant === 'primary' && {
+          backgroundColor: colors.accent,
+          borderColor: 'transparent',
+          shadowColor: colors.accent,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.25,
+          shadowRadius: 8,
+          elevation: 4,
+        },
         variant === 'secondary' && { backgroundColor: colors.surface2, borderColor: colors.border },
         variant === 'ghost' && { backgroundColor: 'transparent', borderColor: colors.border },
         isDisabled && styles.disabled,
@@ -39,11 +47,11 @@ export default function AppButton({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? colors.bg : colors.accent} />
+        <ActivityIndicator color={variant === 'primary' ? '#FFFFFF' : colors.accent} />
       ) : (
         <AppText
           style={[
-            { fontWeight: '800', fontSize: 15, color: colors.bg },
+            { fontWeight: '700', fontSize: 16, color: '#FFFFFF' },
             variant === 'secondary' && { color: colors.text },
             variant === 'ghost' && { color: colors.accent },
           ]}
@@ -57,17 +65,17 @@ export default function AppButton({
 
 const styles = StyleSheet.create({
   base: {
-    height: 54,
-    borderRadius: radius.lg,
+    height: 56,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   disabled: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
   pressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
+    transform: [{ scale: 0.97 }],
+    opacity: 0.85,
   },
 });

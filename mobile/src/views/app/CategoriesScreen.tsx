@@ -69,11 +69,11 @@ export default function CategoriesScreen({ navigation }: any) {
   };
 
   return (
-    <View style={[styles.wrap, { backgroundColor: colors.bg }]}> 
+    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
       <View style={styles.topRow}>
         <AppText title>Categories</AppText>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '800' }}>Close</AppText>
+          <AppText style={{ color: colors.accent, fontWeight: '600' }}>Close</AppText>
         </Pressable>
       </View>
 
@@ -98,8 +98,8 @@ export default function CategoriesScreen({ navigation }: any) {
         )}
         renderItem={({ item }) => (
           <Pressable onLongPress={() => del(item.id)}>
-            <View style={[styles.row, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-              <AppText style={{ fontWeight: '800' }}>{item.name}</AppText>
+            <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <AppText style={{ fontWeight: '600' }}>{item.name}</AppText>
               <AppText muted style={{ fontSize: 12 }}>
                 Long-press to delete
               </AppText>
@@ -129,6 +129,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: radius.lg,
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
 });

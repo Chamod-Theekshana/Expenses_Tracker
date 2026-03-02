@@ -23,11 +23,11 @@ function ProgressBar({
     percentage >= 100
       ? colors.danger
       : percentage >= 80
-      ? '#FFAA00'
+      ? colors.warning
       : colors.success;
 
   return (
-    <View style={[styles.progressTrack, { backgroundColor: colors.surface2 }]}>      
+    <View style={[styles.progressTrack, { backgroundColor: colors.surface2 }]}>
       <View
         style={[
           styles.progressFill,
@@ -124,7 +124,7 @@ export default function BudgetsScreen({ navigation }: any) {
       <View style={styles.topRow}>
         <AppText title>Budgets</AppText>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '800' }}>Close</AppText>
+          <AppText style={{ color: colors.accent, fontWeight: '600' }}>Close</AppText>
         </Pressable>
       </View>
 
@@ -155,9 +155,9 @@ export default function BudgetsScreen({ navigation }: any) {
                 >
                   <AppText
                     style={{
-                      fontWeight: '700',
+                      fontWeight: '600',
                       fontSize: 13,
-                      color: selectedCat === c.name ? colors.bg : colors.text,
+                      color: selectedCat === c.name ? '#FFF' : colors.text,
                     }}
                   >
                     {c.name}
@@ -212,7 +212,7 @@ export default function BudgetsScreen({ navigation }: any) {
             item.percentage >= 100
               ? colors.danger
               : item.percentage >= 80
-              ? '#FFAA00'
+              ? colors.warning
               : colors.success;
 
           return (
@@ -220,16 +220,16 @@ export default function BudgetsScreen({ navigation }: any) {
               <View
                 style={[
                   styles.budgetRow,
-                  { backgroundColor: colors.surface2, borderColor: colors.border },
+                  { backgroundColor: colors.surface, borderColor: colors.border },
                 ]}
               >
                 <View style={styles.budgetHeader}>
-                  <AppText style={{ fontWeight: '800', fontSize: 15 }}>
+                  <AppText style={{ fontWeight: '700', fontSize: 15 }}>
                     {item.category}
                   </AppText>
                   <AppText
                     style={{
-                      fontWeight: '800',
+                      fontWeight: '700',
                       fontSize: 14,
                       color: statusColor,
                     }}
@@ -284,12 +284,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: radius.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   budgetRow: {
     padding: 16,
     borderRadius: radius.lg,
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   budgetHeader: {
     flexDirection: 'row',
@@ -303,12 +303,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   progressTrack: {
-    height: 10,
-    borderRadius: 5,
+    height: 8,
+    borderRadius: 4,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    borderRadius: 5,
+    borderRadius: 4,
   },
 });

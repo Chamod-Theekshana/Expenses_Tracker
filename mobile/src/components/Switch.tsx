@@ -13,7 +13,7 @@ export default function CustomSwitch({ value, onValueChange }: CustomSwitchProps
       onValueChange={onValueChange}
       activeText={''}
       inActiveText={''}
-      backgroundActive={'#D9FD00'}
+      backgroundActive={'#6C5CE7'}
       backgroundInactive={'#555'}
       circleBorderWidth={0}
       circleSize={20}

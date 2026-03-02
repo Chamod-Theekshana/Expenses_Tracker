@@ -11,9 +11,18 @@ type Props = ViewProps & {
 
 export default function Card({ children, padded = true, elevated = false, style, ...props }: Props) {
   const { colors } = useContext(ThemeContext);
-  
+
   return (
-    <View {...props} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, padded && styles.padded, elevated && styles.elevated, style]}>
+    <View
+      {...props}
+      style={[
+        styles.card,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+        padded && styles.padded,
+        elevated && [styles.elevated, { shadowColor: colors.cardShadow }],
+        style,
+      ]}
+    >
       {children}
     </View>
   );
@@ -25,13 +34,12 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   padded: {
-    padding: 16,
+    padding: 18,
   },
   elevated: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
     elevation: 6,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useContext } from 'react';
 import { View, StyleSheet, Alert, Pressable } from 'react-native';
 import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
@@ -7,9 +7,11 @@ import Card from '../../components/Card';
 import { colors, spacing } from '../../theme/colors';
 import { AuthService } from '../../services/AuthService';
 import { getFcmToken } from '../../services/PushNotificationService';
+import { AuthContext } from '../../store/auth';
 
 export default function PasswordCreateScreen({ route, navigation }: any) {
   const { email, signupToken } = route.params;
+  const { setAuthToken } = useContext(AuthContext);
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -42,12 +44,9 @@ export default function PasswordCreateScreen({ route, navigation }: any) {
       const fcmToken = await getFcmToken();
       console.log('[Push] Sending FCM token with account creation:', fcmToken ? 'yes' : 'no');
 
-      await AuthService.setPassword(email, password, signupToken, fcmToken);
-      Alert.alert(
-        'Account Created!',
-        'Your account has been created successfully. Please sign in.',
-        [{ text: 'OK', onPress: () => navigation.navigate('SignIn') }]
-      );
+      const resp = await AuthService.setPassword(email, password, signupToken, fcmToken);
+      await setAuthToken(resp.token, { id: String(resp.user.id), email: resp.user.email });
+      Alert.alert('Account Created!', 'Welcome! Your account is ready.', [{ text: 'OK' }]);
     } catch (error: any) {
       Alert.alert('Error', error?.message || 'Failed to create account');
     } finally {

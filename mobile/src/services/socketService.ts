@@ -4,19 +4,24 @@ import { API_URL } from '../config/env';
 let socket: Socket | null = null;
 
 /**
- * Connects to the backend Socket.IO server and joins the user's room.
- * Works only when the app is running (real-time in-app notifications).
+ * Connects to the backend Socket.IO server.
+ * The backend authenticates the connection via JWT in `auth.token`.
  */
-export function connectSocket(userId: string) {
+export function connectSocket(token: string) {
   if (socket) return socket;
 
   socket = io(API_URL, {
     transports: ['websocket'],
     autoConnect: true,
+    auth: { token },
   });
 
   socket.on('connect', () => {
-    socket?.emit('join', { userId });
+    console.log('[Socket] connected', socket?.id);
+  });
+
+  socket.on('connect_error', (err: any) => {
+    console.warn('[Socket] connect_error:', err?.message || err);
   });
 
   return socket;

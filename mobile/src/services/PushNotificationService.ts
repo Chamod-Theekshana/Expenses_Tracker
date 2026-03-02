@@ -2,6 +2,7 @@ import messaging from '@react-native-firebase/messaging';
 import notifee, { AndroidImportance } from '@notifee/react-native';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { API_URL } from '../config/env';
+import { apiFetch } from './http';
 
 let channelReady = false;
 
@@ -71,13 +72,11 @@ export async function saveTokenToBackend(userId: string, token: string) {
   console.log('[Push] Saving token to backend:', url);
   console.log('[Push]   user_id:', userId, '  token:', token.slice(0, 20) + '...');
   try {
-    const resp = await fetch(url, {
+    const data = await apiFetch('/api/notifications/save-token', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, fcm_token: token }),
+      body: JSON.stringify({ fcm_token: token }),
     });
-    const data = await resp.json();
-    console.log('[Push] Save token response (status', resp.status + '):', JSON.stringify(data));
+    console.log('[Push] Save token response:', JSON.stringify(data));
   } catch (e) {
     console.error('[Push] Save token NETWORK error (is backend reachable at ' + url + '?):', e);
   }

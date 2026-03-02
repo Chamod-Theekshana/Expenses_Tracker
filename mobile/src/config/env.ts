@@ -16,7 +16,7 @@ const IOS_SIMULATOR_HOST = 'localhost';
 
 // Set to true if you are running the app on a real phone.
 // If you're on an emulator/simulator, keep this false.
-export const USE_REAL_DEVICE = true;
+export const USE_REAL_DEVICE = false;
 
 const SIMULATOR_HOST = Platform.OS === 'android' ? ANDROID_EMULATOR_HOST : IOS_SIMULATOR_HOST;
 const DEV_HOST = USE_REAL_DEVICE ? REAL_DEVICE_HOST : SIMULATOR_HOST;

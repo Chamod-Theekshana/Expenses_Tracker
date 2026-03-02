@@ -1,5 +1,7 @@
 import { UserModel } from '../models/UserModel';
 import bcrypt from 'bcrypt';
+import { signAccessToken } from '../utils/jwt';
+import { CategoryModel } from '../models/CategoryModel';
 
 export async function signUp(req: any, res: any) {
   try {
@@ -21,8 +23,13 @@ export async function signUp(req: any, res: any) {
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await UserModel.create(email.toLowerCase(), hashedPassword);
 
+    await CategoryModel.seedDefaults(String(user.id));
+
+    const token = signAccessToken({ id: user.id, email: user.email });
+
     res.status(201).json({ 
       message: "User created successfully", 
+      token,
       user: { id: user.id, email: user.email }
     });
   } catch (error) {
@@ -51,10 +58,14 @@ export async function signIn(req: any, res: any) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
+    const token = signAccessToken({ id: user.id, email: user.email });
+
     res.status(200).json({ 
       message: "Sign in successful", 
+      token,
       user: { id: user.id, email: user.email }
     });
+    console.log("token",token)
   } catch (error) {
     console.error("Error in signIn:", error);
     res.status(500).json({ message: "Server Error" });

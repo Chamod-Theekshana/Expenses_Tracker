@@ -71,7 +71,7 @@ export async function startTestNotifications(userId: string) {
   // await sendTestNotification(uid);
 
   // Schedule daily at 4:30 PM (16:30)
-  scheduleDaily(uid, 14, 50);
+  scheduleDaily(uid, 12, 10);
 }
 
 export function stopTestNotifications(userId: string) {

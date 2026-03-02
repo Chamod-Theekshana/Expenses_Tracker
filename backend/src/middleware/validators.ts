@@ -21,7 +21,7 @@ export function validateNumericParam(paramName: string) {
 }
 
 export function validateTransactionBody(req: Request, res: Response, next: NextFunction) {
-  const { title, amount, category, user_id } = req.body ?? {};
+  const { title, amount, category, created_at, dateISO } = req.body ?? {};
 
   if (typeof title !== "string" || title.trim().length < 1) {
     return res.status(400).json({ message: "Title is required" });
@@ -33,8 +33,14 @@ export function validateTransactionBody(req: Request, res: Response, next: NextF
   if (typeof category !== "string" || category.trim().length < 1) {
     return res.status(400).json({ message: "Category is required" });
   }
-  if (!user_id || !/^\d+$/.test(String(user_id))) {
-    return res.status(400).json({ message: "Valid user_id is required" });
+  // Optional date: accept dateISO or created_at as YYYY-MM-DD
+  const rawDate = dateISO ?? created_at;
+  if (rawDate !== undefined) {
+    const s = String(rawDate);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      return res.status(400).json({ message: 'Date must be in YYYY-MM-DD format' });
+    }
+    (req.body as any).created_at = s;
   }
 
   // Normalize

@@ -1,12 +1,64 @@
 import { TransactionModel } from '../models/TransactionModel';
+import { BudgetModel } from '../models/BudgetModel';
 import { sql } from '../config/db';
 import { emitToUser } from '../socket';
 import { sendPushToUser } from '../services/pushService';
+import type { AuthedRequest } from '../middleware/requireAuth';
+
+/**
+ * Check if a transaction's category has a budget and send alerts at 80%/100% thresholds.
+ */
+async function checkBudgetAlert(userId: string, category: string) {
+  try {
+    const budget = await BudgetModel.findByCategory(userId, category);
+    if (!budget) return;
+
+    const spent = await BudgetModel.getCategorySpent(userId, category);
+    const percentage = budget.amount > 0 ? Math.round((spent / Number(budget.amount)) * 100) : 0;
+
+    if (percentage >= 100) {
+      emitToUser(userId, 'budget:alert', {
+        category,
+        percentage,
+        spent,
+        limit: Number(budget.amount),
+        level: 'exceeded',
+      });
+      await sendPushToUser(
+        userId,
+        `🚨 Budget Exceeded: ${category}`,
+        `You've spent ₨.${spent.toFixed(2)} of your ₨.${Number(budget.amount).toFixed(2)} ${category} budget (${percentage}%).`,
+        { type: 'budget_alert', category, level: 'exceeded' }
+      );
+    } else if (percentage >= 80) {
+      emitToUser(userId, 'budget:alert', {
+        category,
+        percentage,
+        spent,
+        limit: Number(budget.amount),
+        level: 'warning',
+      });
+      await sendPushToUser(
+        userId,
+        `⚠️ Budget Warning: ${category}`,
+        `You've used ${percentage}% of your ${category} budget (₨.${spent.toFixed(2)} / ₨.${Number(budget.amount).toFixed(2)}).`,
+        { type: 'budget_alert', category, level: 'warning' }
+      );
+    }
+  } catch (err) {
+    console.error('[BudgetAlert] Error checking budget:', err);
+  }
+}
 
 
-export async function getTransactionByUserId(req: any, res: any) {
+export async function getTransactionByUserId(req: AuthedRequest, res: any) {
     try {
-        const transactions = await TransactionModel.findByUserId(req.params.user_id);
+        const requested = String(req.params.user_id);
+        const authed = String(req.user!.id);
+        if (requested !== authed) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+        const transactions = await TransactionModel.findByUserId(authed);
         res.status(200).json({ message: "Transactions fetched successfully", transactions });
     }
     catch (error) {
@@ -14,15 +66,12 @@ export async function getTransactionByUserId(req: any, res: any) {
     }
 }
 
-export async function createTransaction(req: any, res: any) {
+export async function createTransaction(req: AuthedRequest, res: any) {
     try {
-        const { title, amount, category, user_id } = req.body;
+        const { title, amount, category, created_at } = req.body;
+        const user_id = String(req.user!.id);
 
-        if (!title || !amount || !category || !user_id) {
-            return res.status(400).json({ message: "All fields are required" });
-        }
-
-        const transaction = await TransactionModel.create(user_id, title, amount, category);
+        const transaction = await TransactionModel.create(user_id, title, amount, category, created_at);
 
         // ✅ Real-time notification to the same user
         emitToUser(user_id, 'tx:new', {
@@ -31,16 +80,15 @@ export async function createTransaction(req: any, res: any) {
             transaction,
         });
 
-        // ✅ Push notification (works when app is background/closed)
-        await sendPushToUser(
-            user_id,
-            'New transaction',
-            `${title} added`,
-            { type: 'tx:new', txId: String(transaction.id ?? '') }
-        );
+
 
         // ✅ Helpful event for re-fetching summary if you use it
         emitToUser(user_id, 'tx:summary:invalidate', { user_id });
+
+        // ✅ Check budget thresholds for this category
+        if (transaction.amount < 0) {
+          await checkBudgetAlert(user_id, category);
+        }
 
         res.status(201).json({ message: "Transaction created successfully", transaction });
     } catch (error) {
@@ -49,18 +97,24 @@ export async function createTransaction(req: any, res: any) {
     }
 }
 
-export async function deleteTransaction(req: any, res: any) {
+export async function deleteTransaction(req: AuthedRequest, res: any) {
     try {
         if (isNaN(Number(req.params.id))) {
             return res.status(400).json({ message: "Invalid transaction ID" });
         }
+
+        const authedUserId = String(req.user!.id);
 
         // Fetch user_id for socket event
         const row = await sql`SELECT user_id, title, amount FROM transactions WHERE id = ${req.params.id}`;
         const userId = row?.[0]?.user_id;
         const title = row?.[0]?.title;
 
-        await TransactionModel.delete(req.params.id);
+        if (!userId || String(userId) !== authedUserId) {
+            return res.status(404).json({ message: 'Not found' });
+        }
+
+        await TransactionModel.deleteByUser(String(req.params.id), authedUserId);
 
         if (userId) {
             emitToUser(userId, 'tx:deleted', {
@@ -69,12 +123,6 @@ export async function deleteTransaction(req: any, res: any) {
                 transaction_id: req.params.id,
             });
 
-            await sendPushToUser(
-                userId,
-                'Transaction deleted',
-                title ? `${title} removed` : 'A transaction was removed',
-                { type: 'tx:deleted', txId: String(req.params.id) }
-            );
             emitToUser(userId, 'tx:summary:invalidate', { user_id: userId });
         }
 
@@ -86,11 +134,16 @@ export async function deleteTransaction(req: any, res: any) {
     }
 }
 
-export async function getTransactionSummaryByUserId(req: any, res: any) {
+export async function getTransactionSummaryByUserId(req: AuthedRequest, res: any) {
     try {
-        const balanceResult = await sql`SELECT COALESCE(SUM(amount), 0) AS balance FROM transactions WHERE user_id = ${req.params.user_id}`;
-        const incomeResult = await sql`SELECT COALESCE(SUM(amount), 0) AS income FROM transactions WHERE user_id = ${req.params.user_id} AND amount > 0`;
-        const expenseResult = await sql`SELECT COALESCE(SUM(amount), 0) AS expense FROM transactions WHERE user_id = ${req.params.user_id} AND amount < 0`;
+        const requested = String(req.params.user_id);
+        const authed = String(req.user!.id);
+        if (requested !== authed) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+        const balanceResult = await sql`SELECT COALESCE(SUM(amount), 0) AS balance FROM transactions WHERE user_id = ${authed}`;
+        const incomeResult = await sql`SELECT COALESCE(SUM(amount), 0) AS income FROM transactions WHERE user_id = ${authed} AND amount > 0`;
+        const expenseResult = await sql`SELECT COALESCE(SUM(amount), 0) AS expense FROM transactions WHERE user_id = ${authed} AND amount < 0`;
 
         res.status(200).json({
             balance: balanceResult[0].balance,
@@ -100,5 +153,44 @@ export async function getTransactionSummaryByUserId(req: any, res: any) {
     }
     catch (error) {
         res.status(500).json({ message: "Server Error" });
+    }
+}
+
+export async function getTransactionById(req: AuthedRequest, res: any) {
+    try {
+        const id = String(req.params.id);
+        const authed = String(req.user!.id);
+        const tx = await TransactionModel.findByIdAndUser(id, authed);
+        if (!tx) return res.status(404).json({ message: 'Not found' });
+        return res.json({ transaction: tx });
+    } catch {
+        return res.status(500).json({ message: 'Server Error' });
+    }
+}
+
+export async function updateTransaction(req: AuthedRequest, res: any) {
+    try {
+        const id = String(req.params.id);
+        const authed = String(req.user!.id);
+        const { title, amount, category, created_at } = req.body;
+        const tx = await TransactionModel.updateByUser(id, authed, title, amount, category, created_at);
+        if (!tx) return res.status(404).json({ message: 'Not found' });
+
+        emitToUser(authed, 'tx:updated', {
+            title: 'Transaction updated',
+            body: `${title} (${amount})`,
+            transaction: tx,
+        });
+        emitToUser(authed, 'tx:summary:invalidate', { user_id: authed });
+
+        // ✅ Check budget thresholds for this category
+        if (tx.amount < 0) {
+          await checkBudgetAlert(authed, category);
+        }
+
+        return res.json({ message: 'Transaction updated successfully', transaction: tx });
+    } catch (e) {
+        console.error('Error updating transaction:', e);
+        return res.status(500).json({ message: 'Server Error' });
     }
 }

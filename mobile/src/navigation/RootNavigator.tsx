@@ -15,11 +15,12 @@ import { ProfileService } from '../services/ProfileService';
 import { NotificationsProvider, NotificationsContext } from '../store/notifications';
 import NotificationBanner from '../components/NotificationBanner';
 import { connectSocket, disconnectSocket, onEvent, offEvent } from '../services/socketService';
-import { initPushForLoggedInUser, listenForegroundPush } from '../services/PushNotificationService';
+import { initPushForLoggedInUser, listenForegroundPush, showLocalNotification } from '../services/PushNotificationService';
 import { API_URL } from '../config/env';
+import { apiFetch } from '../services/http';
 
 function RootNavigatorInner() {
-  const { userEmail, isLoading, userId } = useContext(AuthContext);
+  const { userEmail, isLoading, userId, token } = useContext(AuthContext);
   const { fetchTransactions, clearTransactions } = useContext(TransactionsContext);
   const { loadProfile, clearProfile } = useContext(ProfileContext);
   const { setTheme } = useContext(ThemeContext);
@@ -75,11 +76,7 @@ function RootNavigatorInner() {
 
         // Start periodic test notifications (every 60s) from backend
         try {
-          await fetch(`${API_URL}/api/notifications/start-test`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: userId }),
-          });
+          await apiFetch(`/api/notifications/start-test`, { method: 'POST' });
           console.log('[Push] Test notifications started for user:', userId);
         } catch (e) {
           console.error('[Push] Failed to start test notifications:', e);
@@ -92,19 +89,17 @@ function RootNavigatorInner() {
     return () => {
       if (unsubscribe) unsubscribe();
       // Stop periodic test notifications on logout/unmount
-      fetch(`${API_URL}/api/notifications/stop-test`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId }),
-      }).catch((e) => console.error('[Push] Failed to stop test notifications:', e));
+      apiFetch(`/api/notifications/stop-test`, { method: 'POST' }).catch((e) =>
+        console.error('[Push] Failed to stop test notifications:', e),
+      );
     };
   }, [userId, show]);
 
   // ✅ Socket.IO real-time notifications (works while app is running)
   useEffect(() => {
-    if (!userId || !dataLoaded) return;
+    if (!userId || !dataLoaded || !token) return;
 
-    connectSocket(userId);
+    connectSocket(token);
 
     const onNewTx = async (payload: any) => {
       if (payload?.title) show({ title: payload.title, body: payload.body });
@@ -128,17 +123,33 @@ function RootNavigatorInner() {
       } catch { }
     };
 
+    const onRecurringCreated = (payload: any) => {
+      const title = payload?.title || '🔄 Recurring Added';
+      const body = payload?.body || '';
+      show({ title, body });
+    };
+
+    const onRecurringDeleted = (payload: any) => {
+      const title = payload?.title || '🗑️ Recurring Removed';
+      const body = payload?.body || '';
+      show({ title, body });
+    };
+
     onEvent('tx:new', onNewTx);
     onEvent('tx:deleted', onDeletedTx);
     onEvent('profile:updated', onProfileUpdated);
+    onEvent('recurring:created', onRecurringCreated);
+    onEvent('recurring:deleted', onRecurringDeleted);
 
     return () => {
       offEvent('tx:new', onNewTx);
       offEvent('tx:deleted', onDeletedTx);
       offEvent('profile:updated', onProfileUpdated);
+      offEvent('recurring:created', onRecurringCreated);
+      offEvent('recurring:deleted', onRecurringDeleted);
       disconnectSocket();
     };
-  }, [userId, dataLoaded, fetchTransactions, loadProfile, setTheme, show]);
+  }, [userId, token, dataLoaded, fetchTransactions, loadProfile, setTheme, show]);
 
   // Hide splash when auth loaded and data fetched (or no user)
   useEffect(() => {

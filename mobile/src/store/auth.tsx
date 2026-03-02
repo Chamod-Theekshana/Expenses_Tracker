@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthService } from '../services/AuthService';
+import { setApiAuthToken } from '../services/http';
 
 type AuthState = {
   userEmail: string | null;
@@ -44,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUserEmail(parsed?.email ?? null);
           setUserId(parsed?.id ?? null);
           setToken(parsed?.token ?? null);
+          setApiAuthToken(parsed?.token ?? null);
         }
       } finally {
         setIsLoading(false);
@@ -53,16 +55,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     const response = await AuthService.signIn(email, password);
-    await AsyncStorage.setItem(KEY, JSON.stringify({ email: response.user.email, id: response.user.id }));
+    await AsyncStorage.setItem(
+      KEY,
+      JSON.stringify({ email: response.user.email, id: String(response.user.id), token: response.token }),
+    );
     setUserEmail(response.user.email);
     setUserId(String(response.user.id));
+    setToken(response.token);
+    setApiAuthToken(response.token);
   }, []);
 
   const signUp = useCallback(async (email: string, password: string) => {
     const response = await AuthService.signUp(email, password);
-    await AsyncStorage.setItem(KEY, JSON.stringify({ email: response.user.email, id: response.user.id }));
+    await AsyncStorage.setItem(
+      KEY,
+      JSON.stringify({ email: response.user.email, id: String(response.user.id), token: response.token }),
+    );
     setUserEmail(response.user.email);
     setUserId(String(response.user.id));
+    setToken(response.token);
+    setApiAuthToken(response.token);
   }, []);
 
   const signOut = useCallback(async () => {
@@ -70,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserEmail(null);
     setUserId(null);
     setToken(null);
+    setApiAuthToken(null);
   }, []);
 
   const setAuthToken = useCallback(async (newToken: string, user: { id: string; email: string }) => {
@@ -78,6 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserEmail(user.email);
     setUserId(user.id);
     setToken(newToken);
+    setApiAuthToken(newToken);
   }, []);
 
   const value = useMemo(

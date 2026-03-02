@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { View, StyleSheet, Alert, Pressable } from 'react-native';
 import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
@@ -9,8 +9,9 @@ import { TransactionsContext, Tx } from '../../store/transactions';
 import { AuthContext } from '../../store/auth';
 import { scaleHeight } from '../../constants/size';
 import { ThemeContext } from '../../store/theme';
+import { CategoryService, Category } from '../../services/CategoryService';
 
-const categories: Tx['category'][] = ['Food', 'Transport', 'Bills', 'Shopping', 'Income', 'Other'];
+const fallbackExpenseCategories = ['Food', 'Transport', 'Bills', 'Shopping', 'Other'];
 
 export default function AddTransactionScreen({ navigation }: any) {
   const { addTx } = useContext(TransactionsContext);
@@ -19,16 +20,37 @@ export default function AddTransactionScreen({ navigation }: any) {
 
   const [title, setTitle] = useState('');
   const [amountRaw, setAmountRaw] = useState('');
-  const [category, setCategory] = useState<Tx['category']>('Food');
+  const [category, setCategory] = useState<string>('Food');
   const [isIncome, setIsIncome] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [dateISO, setDateISO] = useState(() => new Date().toISOString().slice(0, 10));
+
+  const [catLoading, setCatLoading] = useState(false);
+  const [cats, setCats] = useState<Category[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setCatLoading(true);
+        const list = await CategoryService.list();
+        setCats(list);
+        const firstExpense = list.find((c) => c.type === 'expense' || c.type === 'both');
+        if (firstExpense?.name) setCategory(firstExpense.name);
+      } catch {
+        // fall back to static
+      } finally {
+        setCatLoading(false);
+      }
+    })();
+  }, []);
 
   const amount = useMemo(() => {
     const n = Number(amountRaw);
     return Number.isFinite(n) ? n : 0;
   }, [amountRaw]);
 
-  const canSave = title.trim().length >= 2 && amount > 0 && userId;
+  const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(dateISO);
+  const canSave = title.trim().length >= 2 && amount > 0 && userId && dateOk;
 
   const save = async () => {
     if (!canSave) {
@@ -37,7 +59,6 @@ export default function AddTransactionScreen({ navigation }: any) {
     }
     try {
       setSaving(true);
-      const dateISO = new Date().toISOString().slice(0, 10);
       await addTx(
         {
           title: title.trim(),
@@ -84,6 +105,13 @@ export default function AddTransactionScreen({ navigation }: any) {
 
         <View style={{ height: 18 }} />
 
+        <AppText muted style={{ marginBottom: 10, fontSize: 13 }}>
+          Date (YYYY-MM-DD)
+        </AppText>
+        <AppInput value={dateISO} onChangeText={setDateISO} placeholder="2026-02-27" />
+
+        <View style={{ height: 18 }} />
+
         <View style={styles.chipsRow}>
           <Pressable onPress={() => setIsIncome(false)} style={[styles.chip, { backgroundColor: colors.surface2, borderColor: colors.border }, !isIncome && { backgroundColor: colors.danger, borderColor: 'transparent' }]}>
             <AppText style={{ fontSize: 18, marginBottom: 2 }}>↙</AppText>
@@ -101,9 +129,12 @@ export default function AddTransactionScreen({ navigation }: any) {
               Category
             </AppText>
             <View style={styles.catWrap}>
-              {categories
-                .filter((c) => c !== 'Income')
-                .map((c) => (
+              {(cats.length
+                ? cats
+                    .filter((c) => c.type === 'expense' || c.type === 'both')
+                    .map((c) => c.name)
+                : fallbackExpenseCategories
+              ).map((c) => (
                   <Pressable
                     key={c}
                     onPress={() => setCategory(c)}
@@ -113,6 +144,11 @@ export default function AddTransactionScreen({ navigation }: any) {
                   </Pressable>
                 ))}
             </View>
+            {!cats.length && !catLoading ? (
+              <AppText muted style={{ marginTop: 10, fontSize: 12 }}>
+                Using built-in categories (could not load from server).
+              </AppText>
+            ) : null}
           </>
         ) : null}
 

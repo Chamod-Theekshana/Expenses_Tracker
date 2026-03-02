@@ -1,5 +1,5 @@
 import React, { useContext, useState, useEffect } from "react";
-import { View, StyleSheet, Alert, ScrollView } from "react-native";
+import { View, StyleSheet, Alert, ScrollView, Pressable } from "react-native";
 import AppText from "../../components/AppText";
 import Card from "../../components/Card";
 import AppButton from "../../components/AppButton";
@@ -14,7 +14,7 @@ import { ProfileContext } from "../../store/profile";
 import { ProfileService } from "../../services/ProfileService";
 import { scaleHeight } from "../../constants/size";
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }: any) {
   const { userEmail, userId, signOut } = useContext(AuthContext);
   const { theme, colors, setTheme } = useContext(ThemeContext);
   const { name: profileName, profilePhoto, currency, dateFormat, updateName, updatePhoto, updateCurrency, updateDateFormat } = useContext(ProfileContext);
@@ -205,6 +205,30 @@ export default function ProfileScreen() {
 
           <AppText muted style={styles.label}>Date Format</AppText>
           <AppPicker options={dateFormatOptions} value={dateFormat} onValueChange={handleDateFormatChange} />
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          <Pressable onPress={() => navigation.getParent()?.navigate('Budgets')}>
+            <View style={[styles.budgetBtn, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+              <View>
+                <AppText style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>Manage Budgets</AppText>
+                <AppText muted style={{ fontSize: 12, marginTop: 2 }}>Set monthly spending limits per category</AppText>
+              </View>
+              <AppText style={{ color: colors.accent, fontWeight: '800', fontSize: 16 }}>→</AppText>
+            </View>
+          </Pressable>
+
+          <View style={{ height: 10 }} />
+
+          <Pressable onPress={() => navigation.getParent()?.navigate('Recurring')}>
+            <View style={[styles.budgetBtn, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+              <View>
+                <AppText style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>Recurring Transactions</AppText>
+                <AppText muted style={{ fontSize: 12, marginTop: 2 }}>Auto-repeat daily, weekly, monthly expenses</AppText>
+              </View>
+              <AppText style={{ color: colors.accent, fontWeight: '800', fontSize: 16 }}>→</AppText>
+            </View>
+          </Pressable>
         </Card>
 
         <View style={{ height: 16 }} />
@@ -257,5 +281,13 @@ const styles = StyleSheet.create({
   },
   buttonRow: {
     flexDirection: 'row',
+  },
+  budgetBtn: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
   },
 });

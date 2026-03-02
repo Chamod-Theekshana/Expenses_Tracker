@@ -5,7 +5,7 @@
   "main": "src/server.ts",
   "scripts": {
     "dev": "nodemon",
-    "build": "tsx",
+    "build": "tsc -p tsconfig.json",
     "start": "tsx src/server.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -23,6 +23,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "firebase-admin": "^13.6.0",
+    "jsonwebtoken": "^9.0.2",
     "nodemailer": "^7.0.12",
     "react-native-crypto": "^2.2.1",
     "socket.io": "^4.8.1",
@@ -32,6 +33,7 @@
     "@types/bcrypt": "^5.0.2",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^25.1.0",
     "@types/nodemailer": "^6.4.14",
     "nodemon": "^3.1.11",

@@ -23,17 +23,53 @@ export class TransactionModel {
     userId: string,
     title: string,
     amount: number,
-    category: string
+    category: string,
+    createdAt?: string
   ): Promise<Transaction> {
-    const result = await sql`
-      INSERT INTO transactions (user_id, title, amount, category) 
-      VALUES (${userId}, ${title}, ${amount}, ${category}) 
-      RETURNING *
-    `;
+    const result = createdAt
+      ? await sql`
+          INSERT INTO transactions (user_id, title, amount, category, created_at)
+          VALUES (${userId}, ${title}, ${amount}, ${category}, ${createdAt})
+          RETURNING *
+        `
+      : await sql`
+          INSERT INTO transactions (user_id, title, amount, category)
+          VALUES (${userId}, ${title}, ${amount}, ${category})
+          RETURNING *
+        `;
     return result[0] as Transaction;
   }
 
-  static async delete(id: string): Promise<void> {
-    await sql`DELETE FROM transactions WHERE id = ${id}`;
+  static async deleteByUser(id: string, userId: string): Promise<void> {
+    await sql`DELETE FROM transactions WHERE id = ${id} AND user_id = ${userId}`;
+  }
+
+  static async findByIdAndUser(id: string, userId: string): Promise<Transaction | null> {
+    const rows = await sql`SELECT * FROM transactions WHERE id = ${id} AND user_id = ${userId}`;
+    return (rows?.[0] as Transaction) || null;
+  }
+
+  static async updateByUser(
+    id: string,
+    userId: string,
+    title: string,
+    amount: number,
+    category: string,
+    createdAt?: string,
+  ): Promise<Transaction | null> {
+    const rows = createdAt
+      ? await sql`
+          UPDATE transactions
+          SET title = ${title}, amount = ${amount}, category = ${category}, created_at = ${createdAt}
+          WHERE id = ${id} AND user_id = ${userId}
+          RETURNING *
+        `
+      : await sql`
+          UPDATE transactions
+          SET title = ${title}, amount = ${amount}, category = ${category}
+          WHERE id = ${id} AND user_id = ${userId}
+          RETURNING *
+        `;
+    return (rows?.[0] as Transaction) || null;
   }
 }

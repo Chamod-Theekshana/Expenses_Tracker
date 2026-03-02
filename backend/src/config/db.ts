@@ -37,6 +37,37 @@ export async function initDB() {
             category VARCHAR(255) NOT NULL,
             created_at DATE NOT NULL DEFAULT CURRENT_DATE
         )`;
+
+        await sql`CREATE TABLE IF NOT EXISTS categories(
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            type VARCHAR(20) NOT NULL DEFAULT 'expense',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, name)
+        )`;
+
+        await sql`CREATE TABLE IF NOT EXISTS budgets(
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            category VARCHAR(255) NOT NULL,
+            amount DECIMAL(10,2) NOT NULL,
+            period VARCHAR(20) NOT NULL DEFAULT 'monthly',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, category)
+        )`;
+
+        await sql`CREATE TABLE IF NOT EXISTS recurring_transactions(
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            amount DECIMAL(10,2) NOT NULL,
+            category VARCHAR(255) NOT NULL,
+            frequency VARCHAR(20) NOT NULL DEFAULT 'monthly',
+            next_run DATE NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT true,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`;
         console.log('Database initialized successfully')
     } catch (error) {
         console.error('Error initializing database', error)

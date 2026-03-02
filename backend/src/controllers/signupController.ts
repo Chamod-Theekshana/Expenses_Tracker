@@ -11,6 +11,8 @@ import {
 } from '../config/signupAuth';
 import bcrypt from 'bcrypt';
 import { saveUserToken, sendPushToUser } from '../services/pushService';
+import { signAccessToken } from '../utils/jwt';
+import { CategoryModel } from '../models/CategoryModel';
 
 export async function sendPasskey(req: any, res: any) {
   try {
@@ -106,6 +108,9 @@ export async function setPassword(req: any, res: any) {
     // Create user
     const user = await UserModel.create(normalizedEmail, passwordHash);
 
+    // Seed default categories
+    await CategoryModel.seedDefaults(String(user.id));
+
     // Clear signup session
     clearSignupSession(normalizedEmail);
 
@@ -117,15 +122,18 @@ export async function setPassword(req: any, res: any) {
       // Send  push notification
       await sendPushToUser(
         String(user.id),
-        ' to PulseSpend! 🎉',
+        'Welcome to PulseSpend! 🎉',
         'Your account is ready. Start tracking your expenses!',
         { type: 'welcome' }
       );
       console.log('[Push] Welcome push sent to user:', user.id);
     }
 
+    const token = signAccessToken({ id: user.id, email: user.email });
+
     res.status(201).json({
       message: 'Account created successfully',
+      token,
       user: {
         id: user.id,
         email: user.email,

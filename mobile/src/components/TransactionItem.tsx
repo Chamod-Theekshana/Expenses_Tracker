@@ -10,15 +10,26 @@ import { images } from '../constants/images';
 export default function TransactionItem({
   item,
   onPress,
+  onLongPress,
 }: {
   item: Tx;
   onPress?: () => void;
+  onLongPress?: () => void;
 }) {
   const { colors } = useContext(ThemeContext);
   const isIncome = item.amount > 0;
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && { opacity: 0.7, transform: [{ scale: 0.98 }] }]}>
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={350}
+      style={({ pressed }) => [
+        styles.row,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+        pressed && { opacity: 0.7, transform: [{ scale: 0.98 }] },
+      ]}
+    >
       <View style={[styles.iconBox, { backgroundColor: isIncome ? 'rgba(77,255,136,0.15)' : 'rgba(255,77,77,0.15)' }]}>
         {isIncome ?  <Image source={images.income} style={styles.Image} /> :  <Image source={images.expense} style={styles.Image} />}
       </View>

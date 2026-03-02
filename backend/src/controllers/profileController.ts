@@ -2,10 +2,17 @@ import { UserModel } from '../models/UserModel';
 import bcrypt from 'bcrypt';
 import { emitToUser } from '../socket';
 import { sendPushToUser } from '../services/pushService';
+import type { AuthedRequest } from '../middleware/requireAuth';
 
-export async function getProfile(req: any, res: any) {
+export async function getProfile(req: AuthedRequest, res: any) {
   try {
-    const user = await UserModel.findById(req.params.user_id);
+    const requested = String(req.params.user_id);
+    const authed = String(req.user!.id);
+    if (requested !== authed) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const user = await UserModel.findById(authed);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -19,19 +26,20 @@ export async function getProfile(req: any, res: any) {
   }
 }
 
-export async function updateProfile(req: any, res: any) {
+export async function updateProfile(req: AuthedRequest, res: any) {
   try {
     const { name, profile_photo, theme, currency, date_format } = req.body;
-    const userId = req.params.user_id;
+    const requested = String(req.params.user_id);
+    const userId = String(req.user!.id);
+    if (requested !== userId) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
 
     const user = await UserModel.updateProfile(userId, { name, profile_photo, theme, currency, date_format });
     const { password, ...profile } = user;
 
     // ✅ notify user in real-time
     emitToUser(userId, 'profile:updated', { profile });
-
-    // ✅ Push (background/closed)
-    await sendPushToUser(userId, 'Profile updated', 'Your profile settings were updated', { type: 'profile:updated' });
 
     res.status(200).json({ message: "Profile updated", profile });
   } catch (error) {
@@ -40,10 +48,14 @@ export async function updateProfile(req: any, res: any) {
   }
 }
 
-export async function updatePassword(req: any, res: any) {
+export async function updatePassword(req: AuthedRequest, res: any) {
   try {
     const { currentPassword, newPassword } = req.body;
-    const userId = req.params.user_id;
+    const requested = String(req.params.user_id);
+    const userId = String(req.user!.id);
+    if (requested !== userId) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
 
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ message: "Current password and new password are required" });

@@ -1,16 +1,17 @@
 import express from "express";
 import { getProfile, updateProfile, updatePassword } from "../controllers/profileController";
 import { validateNumericParam, validateProfileUpdateBody } from "../middleware/validators";
-import { requireUserFromParam } from "../middleware/requireUser";
+import { requireAuth } from "../middleware/requireAuth";
 
 const router = express.Router();
 
-router.get("/:user_id", validateNumericParam("user_id"), requireUserFromParam("user_id"), getProfile);
+router.use(requireAuth);
+
+router.get("/:user_id", validateNumericParam("user_id"), getProfile);
 
 router.put(
   "/:user_id",
   validateNumericParam("user_id"),
-  requireUserFromParam("user_id"),
   validateProfileUpdateBody,
   updateProfile
 );
@@ -18,7 +19,6 @@ router.put(
 router.put(
   "/:user_id/password",
   validateNumericParam("user_id"),
-  requireUserFromParam("user_id"),
   updatePassword
 );
 

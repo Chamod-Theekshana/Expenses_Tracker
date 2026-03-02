@@ -4,7 +4,7 @@ import { TransactionService } from '../services/TransactionService';
 export type Tx = {
   id: string;
   title: string;
-  category: 'Food' | 'Transport' | 'Bills' | 'Shopping' | 'Income' | 'Other';
+  category: string;
   amount: number;
   dateISO: string;
 };
@@ -12,6 +12,7 @@ export type Tx = {
 type Ctx = {
   items: Tx[];
   addTx: (tx: Omit<Tx, 'id'>, userId: string) => Promise<void>;
+  updateTx: (id: string, tx: Omit<Tx, 'id'>, userId: string) => Promise<void>;
   removeTx: (id: string) => Promise<void>;
   fetchTransactions: (userId: string) => Promise<void>;
   clearTransactions: () => void;
@@ -21,6 +22,7 @@ type Ctx = {
 export const TransactionsContext = createContext<Ctx>({
   items: [],
   addTx: async () => {},
+  updateTx: async () => {},
   removeTx: async () => {},
   fetchTransactions: async () => {},
   clearTransactions: () => {},
@@ -45,10 +47,20 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
 
   const addTx = useCallback(async (tx: Omit<Tx, 'id'>, userId: string) => {
     try {
-      await TransactionService.createTransaction(tx.title, tx.amount, tx.category, userId);
+      await TransactionService.createTransaction(tx.title, tx.amount, tx.category, userId, tx.dateISO);
       await fetchTransactions(userId);
     } catch (error) {
       console.error('Failed to add transaction:', error);
+      throw error;
+    }
+  }, [fetchTransactions]);
+
+  const updateTx = useCallback(async (id: string, tx: Omit<Tx, 'id'>, userId: string) => {
+    try {
+      await TransactionService.updateTransaction(id, tx.title, tx.amount, tx.category, tx.dateISO);
+      await fetchTransactions(userId);
+    } catch (error) {
+      console.error('Failed to update transaction:', error);
       throw error;
     }
   }, [fetchTransactions]);
@@ -68,8 +80,8 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const value = useMemo(
-    () => ({ items, addTx, removeTx, fetchTransactions, clearTransactions, loading }),
-    [items, addTx, removeTx, fetchTransactions, clearTransactions, loading],
+    () => ({ items, addTx, updateTx, removeTx, fetchTransactions, clearTransactions, loading }),
+    [items, addTx, updateTx, removeTx, fetchTransactions, clearTransactions, loading],
   );
 
   return <TransactionsContext.Provider value={value}>{children}</TransactionsContext.Provider>;

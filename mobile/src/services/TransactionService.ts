@@ -9,6 +9,7 @@ export class TransactionService {
       title: tx.title,
       category: tx.category,
       amount: Number(tx.amount),
+      currency: tx.currency || 'LKR',
       dateISO: tx.created_at,
     }));
   }
@@ -18,11 +19,12 @@ export class TransactionService {
     amount: number,
     category: string,
     _userId: string,
-    dateISO?: string
+    dateISO?: string,
+    currency?: string,
   ): Promise<void> {
     await apiFetch(`/api/transaction`, {
       method: 'POST',
-      body: JSON.stringify({ title, amount, category, dateISO }),
+      body: JSON.stringify({ title, amount, category, dateISO, currency: currency || 'LKR' }),
     });
   }
 
@@ -32,10 +34,11 @@ export class TransactionService {
     amount: number,
     category: string,
     dateISO?: string,
+    currency?: string,
   ): Promise<void> {
     await apiFetch(`/api/transaction/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ title, amount, category, dateISO }),
+      body: JSON.stringify({ title, amount, category, dateISO, currency: currency || 'LKR' }),
     });
   }
 

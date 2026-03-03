@@ -3,6 +3,7 @@ import { BudgetModel } from '../models/BudgetModel';
 import { sql } from '../config/db';
 import { emitToUser } from '../socket';
 import { sendPushToUser } from '../services/pushService';
+import { convert } from '../services/exchangeRateService';
 import type { AuthedRequest } from '../middleware/requireAuth';
 
 /**
@@ -68,10 +69,10 @@ export async function getTransactionByUserId(req: AuthedRequest, res: any) {
 
 export async function createTransaction(req: AuthedRequest, res: any) {
     try {
-        const { title, amount, category, created_at } = req.body;
+        const { title, amount, category, created_at, currency } = req.body;
         const user_id = String(req.user!.id);
 
-        const transaction = await TransactionModel.create(user_id, title, amount, category, created_at);
+        const transaction = await TransactionModel.create(user_id, title, amount, category, created_at, currency);
 
         // ✅ Real-time notification to the same user
         emitToUser(user_id, 'tx:new', {
@@ -141,17 +142,36 @@ export async function getTransactionSummaryByUserId(req: AuthedRequest, res: any
         if (requested !== authed) {
             return res.status(403).json({ message: 'Forbidden' });
         }
-        const balanceResult = await sql`SELECT COALESCE(SUM(amount), 0) AS balance FROM transactions WHERE user_id = ${authed}`;
-        const incomeResult = await sql`SELECT COALESCE(SUM(amount), 0) AS income FROM transactions WHERE user_id = ${authed} AND amount > 0`;
-        const expenseResult = await sql`SELECT COALESCE(SUM(amount), 0) AS expense FROM transactions WHERE user_id = ${authed} AND amount < 0`;
+
+        // Get user's preferred currency
+        const userRows = await sql`SELECT currency FROM users WHERE id = ${authed}`;
+        const preferredCurrency = (userRows[0]?.currency as string) || 'LKR';
+
+        // Get all transactions with their original currency
+        const transactions = await sql`SELECT amount, currency FROM transactions WHERE user_id = ${authed}`;
+
+        let income = 0;
+        let expense = 0;
+
+        for (const tx of transactions) {
+          const amt = Number(tx.amount);
+          const txCurrency = (tx.currency as string) || 'LKR';
+          const converted = await convert(amt, txCurrency, preferredCurrency);
+          if (converted > 0) income += converted;
+          else expense += converted;
+        }
+
+        const balance = income + expense;
 
         res.status(200).json({
-            balance: balanceResult[0].balance,
-            income: incomeResult[0].income,
-            expense: expenseResult[0].expense
+            balance: Math.round(balance * 100) / 100,
+            income: Math.round(income * 100) / 100,
+            expense: Math.round(expense * 100) / 100,
+            currency: preferredCurrency,
         });
     }
     catch (error) {
+        console.error('Error fetching summary:', error);
         res.status(500).json({ message: "Server Error" });
     }
 }
@@ -172,8 +192,8 @@ export async function updateTransaction(req: AuthedRequest, res: any) {
     try {
         const id = String(req.params.id);
         const authed = String(req.user!.id);
-        const { title, amount, category, created_at } = req.body;
-        const tx = await TransactionModel.updateByUser(id, authed, title, amount, category, created_at);
+        const { title, amount, category, created_at, currency } = req.body;
+        const tx = await TransactionModel.updateByUser(id, authed, title, amount, category, created_at, currency);
         if (!tx) return res.status(404).json({ message: 'Not found' });
 
         emitToUser(authed, 'tx:updated', {

@@ -1,11 +1,17 @@
-import React from 'react';
+import React, { useContext } from 'react';
+import { View, StyleSheet, Pressable } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppTabs from './AppTabs';
 import AddTransactionScreen from '../views/app/AddTransactionScreen';
 import TransactionDetailScreen from '../views/app/TransactionDetailScreen';
 import CategoriesScreen from '../views/app/CategoriesScreen';
 import BudgetsScreen from '../views/app/BudgetsScreen';
 import RecurringScreen from '../views/app/RecurringScreen';
+import DateFilterBar from '../components/DateFilterBar';
+import AppText from '../components/AppText';
+import { ThemeContext } from '../store/theme';
+import { DateFilterContext } from '../store/dateFilter';
 
 export type AppStackParamList = {
   Tabs: undefined;
@@ -18,10 +24,50 @@ export type AppStackParamList = {
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
+function TabsWithFilter() {
+  const insets = useSafeAreaInsets();
+  const { colors } = useContext(ThemeContext);
+  const { isOpen, setIsOpen, hasActiveFilter, filterLabel } = useContext(DateFilterContext);
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+      {/* Safe area spacer + DateFilterBar (collapses to 0) */}
+      <View style={{ backgroundColor: colors.surface }}>
+        <View style={{ height: insets.top, backgroundColor: colors.surface }} />
+        <DateFilterBar />
+      </View>
+
+      {/* Tab content */}
+      <View style={styles.content}>
+        <AppTabs />
+      </View>
+
+      {/* ── Floating Filter Toggle Button ── */}
+      <Pressable
+        onPress={() => setIsOpen(!isOpen)}
+        style={[
+          styles.filterFab,
+          {
+            top: insets.top + 6,
+            backgroundColor: isOpen ? colors.accent : colors.surface,
+            borderColor: isOpen ? colors.accent : colors.border,
+            shadowColor: colors.accent,
+          },
+        ]}
+      >
+        <AppText style={{ fontSize: 14 }}>📅</AppText>
+        {hasActiveFilter && !isOpen && (
+          <View style={[styles.fabDot, { backgroundColor: colors.accent }]} />
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 export default function AppStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Tabs" component={AppTabs} />
+      <Stack.Screen name="Tabs" component={TabsWithFilter} />
       <Stack.Screen
         name="AddTx"
         component={AddTransactionScreen}
@@ -65,3 +111,35 @@ export default function AppStack() {
     </Stack.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+  },
+  filterFab: {
+    position: 'absolute',
+    right: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
+    zIndex: 100,
+  },
+  fabDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+});

@@ -5,5 +5,6 @@ export interface Transaction {
   title: string;
   category: TransactionCategory;
   amount: number;
+  currency: string;
   dateISO: string;
 }

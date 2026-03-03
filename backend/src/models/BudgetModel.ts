@@ -68,11 +68,38 @@ export class BudgetModel {
   }
 
   /**
-   * Returns all budgets for a user with current month spending calculated.
+   * Returns all budgets for a user with spending calculated for the given date range.
+   * If no year/month/day provided, defaults to current month spending.
    */
-  static async getStatusByUser(userId: string): Promise<BudgetStatus[]> {
-    const now = new Date();
-    const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  static async getStatusByUser(
+    userId: string,
+    year?: number,
+    month?: number,
+    day?: number,
+  ): Promise<BudgetStatus[]> {
+    let startDate: string;
+    let endDate: string;
+
+    if (year && month && day) {
+      // Specific date
+      startDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      endDate = startDate; // same day
+    } else if (year && month) {
+      // Specific month
+      startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    } else if (year) {
+      // Entire year
+      startDate = `${year}-01-01`;
+      endDate = `${year}-12-31`;
+    } else {
+      // Default: current month
+      const now = new Date();
+      startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    }
 
     const rows = await sql`
       SELECT
@@ -83,7 +110,10 @@ export class BudgetModel {
         b.period,
         b.created_at,
         COALESCE(ABS(SUM(
-          CASE WHEN t.amount < 0 AND t.created_at >= ${firstOfMonth}::date THEN t.amount ELSE 0 END
+          CASE WHEN t.amount < 0
+               AND t.created_at >= ${startDate}::date
+               AND t.created_at <= ${endDate}::date + interval '1 day'
+               THEN t.amount ELSE 0 END
         )), 0) AS spent
       FROM budgets b
       LEFT JOIN transactions t

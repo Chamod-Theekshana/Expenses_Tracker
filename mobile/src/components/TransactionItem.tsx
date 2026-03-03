@@ -18,6 +18,8 @@ export default function TransactionItem({
 }) {
   const { colors } = useContext(ThemeContext);
   const isIncome = item.amount > 0;
+  const cur = item.currency || 'LKR';
+  const showBadge = cur !== 'LKR';
 
   return (
     <Pressable
@@ -39,9 +41,14 @@ export default function TransactionItem({
           {item.category} · {item.dateISO}
         </AppText>
       </View>
-      <AppText mono style={{ fontWeight: '700', fontSize: 16, color: isIncome ? colors.success : colors.text }}>
-        {formatMoney(item.amount)}
+      <AppText mono style={{ fontWeight: '800', fontSize: 16, color: isIncome ? colors.success : colors.text }}>
+        {formatMoney(item.amount, cur)}
       </AppText>
+      {showBadge && (
+        <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, marginLeft: 4 }}>
+          <AppText style={{ fontSize: 10, fontWeight: '700', color: colors.muted }}>{cur}</AppText>
+        </View>
+      )}
     </Pressable>
   );
 }

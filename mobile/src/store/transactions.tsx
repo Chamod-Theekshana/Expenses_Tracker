@@ -6,6 +6,7 @@ export type Tx = {
   title: string;
   category: string;
   amount: number;
+  currency: string;
   dateISO: string;
 };
 
@@ -47,7 +48,7 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
 
   const addTx = useCallback(async (tx: Omit<Tx, 'id'>, userId: string) => {
     try {
-      await TransactionService.createTransaction(tx.title, tx.amount, tx.category, userId, tx.dateISO);
+      await TransactionService.createTransaction(tx.title, tx.amount, tx.category, userId, tx.dateISO, tx.currency);
       await fetchTransactions(userId);
     } catch (error) {
       console.error('Failed to add transaction:', error);
@@ -57,7 +58,7 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
 
   const updateTx = useCallback(async (id: string, tx: Omit<Tx, 'id'>, userId: string) => {
     try {
-      await TransactionService.updateTransaction(id, tx.title, tx.amount, tx.category, tx.dateISO);
+      await TransactionService.updateTransaction(id, tx.title, tx.amount, tx.category, tx.dateISO, tx.currency);
       await fetchTransactions(userId);
     } catch (error) {
       console.error('Failed to update transaction:', error);

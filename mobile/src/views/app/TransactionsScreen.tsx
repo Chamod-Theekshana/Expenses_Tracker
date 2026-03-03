@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import AppText from '../../components/AppText';
 import { spacing, radius } from '../../theme/colors';
 import { TransactionsContext } from '../../store/transactions';
+import { DateFilterContext } from '../../store/dateFilter';
 import { AuthContext } from '../../store/auth';
 import TransactionItem from '../../components/TransactionItem';
 import { ThemeContext } from '../../store/theme';
@@ -18,6 +19,7 @@ export default function TransactionsScreen() {
   const { userId } = useContext(AuthContext);
   const { colors } = useContext(ThemeContext);
   const { loading } = useContext(TransactionsContext);
+  const { matchesFilter, hasActiveFilter, filterLabel } = useContext(DateFilterContext);
 
   // Filter state
   const [search, setSearch] = useState('');
@@ -39,7 +41,8 @@ export default function TransactionsScreen() {
 
   // Apply all filters
   const filteredItems = useMemo(() => {
-    let result = [...items];
+    // Apply global date filter first
+    let result = items.filter(t => matchesFilter(t.dateISO));
 
     // Search filter
     if (search.trim()) {
@@ -71,7 +74,7 @@ export default function TransactionsScreen() {
     });
 
     return result;
-  }, [items, search, typeFilter, selectedCategory, sortNewest]);
+  }, [items, search, typeFilter, selectedCategory, sortNewest, matchesFilter]);
 
   const hasFilters = search.trim().length > 0 || typeFilter !== 'All' || selectedCategory !== '';
 

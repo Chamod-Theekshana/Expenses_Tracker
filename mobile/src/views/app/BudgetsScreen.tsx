@@ -8,8 +8,10 @@ import { ThemeContext } from '../../store/theme';
 import { spacing, radius } from '../../theme/colors';
 import { BudgetService, BudgetStatus } from '../../services/BudgetService';
 import { CategoryService, Category } from '../../services/CategoryService';
+import { DateFilterContext } from '../../store/dateFilter';
 import { formatMoney } from '../../utils/money';
 import { scaleHeight } from '../../constants/size';
+import { ProfileContext } from '../../store/profile';
 
 function ProgressBar({
   percentage,
@@ -43,6 +45,8 @@ function ProgressBar({
 
 export default function BudgetsScreen({ navigation }: any) {
   const { colors } = useContext(ThemeContext);
+  const { year, month, day } = useContext(DateFilterContext);
+  const { currency: preferredCurrency } = useContext(ProfileContext);
   const [budgets, setBudgets] = useState<BudgetStatus[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
@@ -60,7 +64,7 @@ export default function BudgetsScreen({ navigation }: any) {
     try {
       setLoading(true);
       const [statuses, cats] = await Promise.all([
-        BudgetService.getStatus(),
+        BudgetService.getStatus(year, month, day),
         CategoryService.list(),
       ]);
       setBudgets(statuses);
@@ -74,7 +78,7 @@ export default function BudgetsScreen({ navigation }: any) {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [year, month, day]);
 
   // Filter to categories that don't already have a budget
   const availableCategories = useMemo(() => {
@@ -242,10 +246,10 @@ export default function BudgetsScreen({ navigation }: any) {
 
                 <View style={styles.budgetFooter}>
                   <AppText muted style={{ fontSize: 12 }}>
-                    Spent: {formatMoney(item.spent)}
+                    Spent: {formatMoney(item.spent, preferredCurrency)}
                   </AppText>
                   <AppText muted style={{ fontSize: 12 }}>
-                    Limit: {formatMoney(item.amount)}
+                    Limit: {formatMoney(item.amount, preferredCurrency)}
                   </AppText>
                 </View>
 

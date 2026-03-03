@@ -4,6 +4,7 @@ export type RecurringRule = {
   id: string;
   title: string;
   amount: number;
+  currency: string;
   category: string;
   frequency: string;
   next_run: string;
@@ -17,6 +18,7 @@ export class RecurringService {
       id: String(r.id),
       title: String(r.title),
       amount: Number(r.amount),
+      currency: String(r.currency || 'LKR'),
       category: String(r.category),
       frequency: String(r.frequency),
       next_run: String(r.next_run),
@@ -39,6 +41,7 @@ export class RecurringService {
       id: String(data.recurring.id),
       title: data.recurring.title,
       amount: Number(data.recurring.amount),
+      currency: String(data.recurring.currency || 'LKR'),
       category: data.recurring.category,
       frequency: data.recurring.frequency,
       next_run: data.recurring.next_run,
@@ -58,6 +61,7 @@ export class RecurringService {
       id: String(data.recurring.id),
       title: data.recurring.title,
       amount: Number(data.recurring.amount),
+      currency: String(data.recurring.currency || 'LKR'),
       category: data.recurring.category,
       frequency: data.recurring.frequency,
       next_run: data.recurring.next_run,

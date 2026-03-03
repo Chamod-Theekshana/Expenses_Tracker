@@ -8,6 +8,7 @@ import { ThemeContext } from '../../store/theme';
 import { spacing, radius } from '../../theme/colors';
 import { RecurringService, RecurringRule } from '../../services/RecurringService';
 import { CategoryService, Category } from '../../services/CategoryService';
+import { DateFilterContext } from '../../store/dateFilter';
 import { formatMoney } from '../../utils/money';
 import { scaleHeight } from '../../constants/size';
 
@@ -33,6 +34,7 @@ function FrequencyBadge({ frequency, colors }: { frequency: string; colors: any 
 
 export default function RecurringScreen({ navigation }: any) {
   const { colors } = useContext(ThemeContext);
+  const { matchesFilter } = useContext(DateFilterContext);
   const [rules, setRules] = useState<RecurringRule[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
@@ -233,7 +235,7 @@ export default function RecurringScreen({ navigation }: any) {
 
       {/* Rules List */}
       <FlatList
-        data={rules}
+        data={rules.filter(r => matchesFilter(r.next_run))}
         keyExtractor={(i) => i.id}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         ListEmptyComponent={() => (
@@ -267,7 +269,7 @@ export default function RecurringScreen({ navigation }: any) {
                         color: isExpense ? colors.danger : colors.success,
                       }}
                     >
-                      {formatMoney(item.amount)}
+                      {formatMoney(item.amount, item.currency || 'LKR')}
                     </AppText>
                     <FrequencyBadge frequency={item.frequency} colors={colors} />
                   </View>

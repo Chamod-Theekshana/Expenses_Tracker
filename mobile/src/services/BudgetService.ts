@@ -23,8 +23,18 @@ export class BudgetService {
     }));
   }
 
-  static async getStatus(): Promise<BudgetStatus[]> {
-    const data = await apiFetch<{ budgets: any[] }>('/api/budgets/status');
+  static async getStatus(
+    year?: number | null,
+    month?: number | null,
+    day?: number | null,
+  ): Promise<BudgetStatus[]> {
+    const parts: string[] = [];
+    if (year) parts.push(`year=${year}`);
+    if (month) parts.push(`month=${month}`);
+    if (day) parts.push(`day=${day}`);
+    const qs = parts.length > 0 ? `?${parts.join('&')}` : '';
+    const url = `/api/budgets/status${qs}`;
+    const data = await apiFetch<{ budgets: any[] }>(url);
     return (data.budgets || []).map((b) => ({
       id: String(b.id),
       category: String(b.category),

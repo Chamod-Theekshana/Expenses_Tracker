@@ -5,6 +5,7 @@ import messaging from '@react-native-firebase/messaging';
 import RootNavigator from './src/navigation/RootNavigator';
 import { AuthProvider } from './src/store/auth';
 import { TransactionsProvider } from './src/store/transactions';
+import { DateFilterProvider } from './src/store/dateFilter';
 import { ThemeProvider, ThemeContext } from './src/store/theme';
 import { ProfileProvider } from './src/store/profile';
 import { requestPushPermission, ensureNotifChannel, showLocalNotification } from './src/services/PushNotificationService';
@@ -53,7 +54,9 @@ export default function App() {
         <AuthProvider>
           <ProfileProvider>
             <TransactionsProvider>
-              <RootNavigator />
+              <DateFilterProvider>
+                <RootNavigator />
+              </DateFilterProvider>
             </TransactionsProvider>
           </ProfileProvider>
         </AuthProvider>

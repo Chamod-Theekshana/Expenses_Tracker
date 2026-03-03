@@ -10,7 +10,10 @@ export async function listBudgets(req: AuthedRequest, res: Response) {
 
 export async function getBudgetStatus(req: AuthedRequest, res: Response) {
   const userId = String(req.user!.id);
-  const statuses = await BudgetModel.getStatusByUser(userId);
+  const year = req.query.year ? Number(req.query.year) : undefined;
+  const month = req.query.month ? Number(req.query.month) : undefined;
+  const day = req.query.day ? Number(req.query.day) : undefined;
+  const statuses = await BudgetModel.getStatusByUser(userId, year, month, day);
   return res.json({ budgets: statuses });
 }
 

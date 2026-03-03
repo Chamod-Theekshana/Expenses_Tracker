@@ -4,9 +4,11 @@ import AppText from '../../components/AppText';
 import Card from '../../components/Card';
 import { spacing, radius } from '../../theme/colors';
 import { TransactionsContext } from '../../store/transactions';
+import { DateFilterContext } from '../../store/dateFilter';
 import { formatMoney } from '../../utils/money';
 import { scaleHeight } from '../../constants/size';
 import { ThemeContext } from '../../store/theme';
+import { ProfileContext } from '../../store/profile';
 import Svg, { Circle, Rect, Text as SvgText } from 'react-native-svg';
 
 const { width } = Dimensions.get('window');
@@ -14,9 +16,17 @@ const { width } = Dimensions.get('window');
 export default function ChartsScreen() {
   const { items } = useContext(TransactionsContext);
   const { colors } = useContext(ThemeContext);
+  const { matchesFilter, filterLabel, hasActiveFilter } = useContext(DateFilterContext);
+  const { currency: preferredCurrency } = useContext(ProfileContext);
+
+  // Apply global date filter
+  const filteredItems = useMemo(
+    () => items.filter(t => matchesFilter(t.dateISO)),
+    [items, matchesFilter],
+  );
 
   const categoryData = useMemo(() => {
-    const expenses = items.filter(t => t.amount < 0);
+    const expenses = filteredItems.filter(t => t.amount < 0);
     const categories: Record<string, number> = {};
 
     expenses.forEach(t => {
@@ -34,7 +44,7 @@ export default function ChartsScreen() {
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
-  }, [items]);
+  }, [filteredItems]);
 
   const monthlyData = useMemo(() => {
     // Build last 6 months (including current month) from real transactions
@@ -51,7 +61,7 @@ export default function ChartsScreen() {
     const byKey: Record<string, { income: number; expense: number }> = {};
     months.forEach(m => (byKey[m.key] = { income: 0, expense: 0 }));
 
-    items.forEach(t => {
+    filteredItems.forEach(t => {
       const date = new Date(t.dateISO);
       if (Number.isNaN(date.getTime())) return;
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -66,7 +76,7 @@ export default function ChartsScreen() {
       income: byKey[m.key].income,
       expense: byKey[m.key].expense,
     }));
-  }, [items]);
+  }, [filteredItems]);
 
   const chartColors = ['#6C5CE7', '#2ED573', '#00D9FF', '#FF6B6B', '#FFAA00'];
 
@@ -183,7 +193,7 @@ export default function ChartsScreen() {
                 <View style={[styles.colorDot, { backgroundColor: chartColors[index % chartColors.length] }]} />
                 <AppText style={{ fontSize: 14 }}>{item.name}</AppText>
               </View>
-              <AppText mono style={{ fontWeight: '700', fontSize: 14 }}>{formatMoney(item.value)}</AppText>
+              <AppText mono style={{ fontWeight: '700', fontSize: 14 }}>{formatMoney(item.value, preferredCurrency)}</AppText>
               <AppText muted style={{ fontSize: 12, width: 50, textAlign: 'right' }}>
                 {item.percentage.toFixed(1)}%
               </AppText>

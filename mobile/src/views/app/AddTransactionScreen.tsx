@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { View, StyleSheet, Alert, Pressable } from 'react-native';
+import { View, StyleSheet, Alert, Pressable, ScrollView } from 'react-native';
 import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
 import AppButton from '../../components/AppButton';
@@ -9,14 +9,17 @@ import { TransactionsContext, Tx } from '../../store/transactions';
 import { AuthContext } from '../../store/auth';
 import { scaleHeight } from '../../constants/size';
 import { ThemeContext } from '../../store/theme';
+import { ProfileContext } from '../../store/profile';
 import { CategoryService, Category } from '../../services/CategoryService';
 
 const fallbackExpenseCategories = ['Food', 'Transport', 'Bills', 'Shopping', 'Other'];
+const CURRENCY_OPTIONS = ['LKR', 'USD', 'EUR', 'GBP'];
 
 export default function AddTransactionScreen({ navigation }: any) {
   const { addTx } = useContext(TransactionsContext);
   const { userId } = useContext(AuthContext);
   const { colors } = useContext(ThemeContext);
+  const { currency: preferredCurrency } = useContext(ProfileContext);
 
   const [title, setTitle] = useState('');
   const [amountRaw, setAmountRaw] = useState('');
@@ -24,6 +27,7 @@ export default function AddTransactionScreen({ navigation }: any) {
   const [isIncome, setIsIncome] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dateISO, setDateISO] = useState(() => new Date().toISOString().slice(0, 10));
+  const [currency, setCurrency] = useState(preferredCurrency || 'LKR');
 
   const [catLoading, setCatLoading] = useState(false);
   const [cats, setCats] = useState<Category[]>([]);
@@ -64,6 +68,7 @@ export default function AddTransactionScreen({ navigation }: any) {
           title: title.trim(),
           category: isIncome ? 'Income' : category,
           amount: isIncome ? amount : -amount,
+          currency,
           dateISO,
         },
         userId!,
@@ -75,9 +80,10 @@ export default function AddTransactionScreen({ navigation }: any) {
       setSaving(false);
     }
   };
+  const Wrapper = isIncome ? View : ScrollView;
 
   return (
-    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
+    <Wrapper style={[styles.wrap, { backgroundColor: colors.bg }]} showsVerticalScrollIndicator={false} contentContainerStyle={!isIncome ? { paddingBottom: scaleHeight(50) } : undefined}>
       <View style={styles.topRow}>
         <AppText title>Add</AppText>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
@@ -112,6 +118,29 @@ export default function AddTransactionScreen({ navigation }: any) {
 
         <View style={{ height: 18 }} />
 
+        <AppText muted style={{ marginBottom: 10, fontSize: 13 }}>
+          Currency
+        </AppText>
+        <View style={styles.chipsRow}>
+          {CURRENCY_OPTIONS.map((cur) => (
+            <Pressable
+              key={cur}
+              onPress={() => setCurrency(cur)}
+              style={[
+                styles.currencyChip,
+                { backgroundColor: colors.surface2, borderColor: colors.border },
+                currency === cur && { backgroundColor: colors.accent, borderColor: colors.accent },
+              ]}
+            >
+              <AppText style={{ fontWeight: '700', fontSize: 13, color: currency === cur ? '#000' : colors.text }}>
+                {cur}
+              </AppText>
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={{ height: 18 }} />
+      
         <View style={styles.chipsRow}>
           <Pressable onPress={() => setIsIncome(false)} style={[styles.chip, { backgroundColor: colors.surface2, borderColor: colors.border }, !isIncome && { backgroundColor: colors.danger, borderColor: 'transparent' }]}>
             <AppText style={{ fontSize: 18, marginBottom: 2 }}>↙</AppText>
@@ -154,7 +183,7 @@ export default function AddTransactionScreen({ navigation }: any) {
 
         <AppButton title="Save Transaction" onPress={save} disabled={!canSave} loading={saving} style={{ marginTop: 20 }} />
       </Card>
-    </View>
+    </Wrapper>
   );
 }
 
@@ -162,7 +191,7 @@ const styles = StyleSheet.create({
   wrap: {
     flex: 1,
     padding: spacing.lg,
-    marginTop: scaleHeight(50),
+    marginTop: scaleHeight(30),
   },
   topRow: {
     flexDirection: 'row',
@@ -192,5 +221,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: radius.md,
     borderWidth: 1,
+  },
+  currencyChip: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

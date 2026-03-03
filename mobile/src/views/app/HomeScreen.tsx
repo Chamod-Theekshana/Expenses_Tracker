@@ -7,11 +7,13 @@ import { spacing, radius } from '../../theme/colors';
 import { TransactionsContext } from '../../store/transactions';
 import { AuthContext } from '../../store/auth';
 import { ProfileContext } from '../../store/profile';
+import { DateFilterContext } from '../../store/dateFilter';
 import { formatMoney } from '../../utils/money';
 import { scaleHeight } from '../../constants/size';
 import { ThemeContext } from '../../store/theme';
 import { images } from '../../constants/images';
 import { BudgetService, BudgetStatus } from '../../services/BudgetService';
+import { ExchangeRateService } from '../../services/ExchangeRateService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -116,22 +118,58 @@ function getCategoryColor(category: string): string {
 export default function HomeScreen({ navigation }: any) {
   const { items } = useContext(TransactionsContext);
   const { userEmail } = useContext(AuthContext);
-  const { name, profilePhoto } = useContext(ProfileContext);
+  const { name, profilePhoto, currency: preferredCurrency } = useContext(ProfileContext);
   const { colors } = useContext(ThemeContext);
+  const { matchesFilter, year, month, day, filterLabel, hasActiveFilter } = useContext(DateFilterContext);
 
   const [allBudgets, setAllBudgets] = useState<BudgetStatus[]>([]);
+  const [rates, setRates] = useState<Record<string, number>>({});
+
+  // Fetch exchange rates for conversion
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await ExchangeRateService.getRates(preferredCurrency);
+        setRates(r && typeof r === 'object' ? r : {});
+      } catch { /* fallback: no conversion */ }
+    })();
+  }, [preferredCurrency]);
+
+  // Apply global date filter
+  const filteredItems = useMemo(
+    () => items.filter(t => matchesFilter(t.dateISO)),
+    [items, matchesFilter],
+  );
+
+  // Convert helper: convert amount from txCurrency to preferredCurrency
+  const convertAmount = (amount: number, txCurrency: string) => {
+    if (!txCurrency || txCurrency === preferredCurrency) return amount;
+    if (!rates || Object.keys(rates).length === 0) return amount;
+    const rateToTx = rates[txCurrency.toUpperCase()];
+    if (!rateToTx || rateToTx === 0) return amount;
+    return Math.round((amount / rateToTx) * 100) / 100;
+  };
 
   const stats = useMemo(() => {
-    const income = items.filter(t => t.amount > 0).reduce((a, b) => a + b.amount, 0);
-    const expense = items.filter(t => t.amount < 0).reduce((a, b) => a + b.amount, 0);
+    let income = 0;
+    let expense = 0;
+    filteredItems.forEach(t => {
+      const converted = convertAmount(t.amount, t.currency || 'LKR');
+      if (converted > 0) income += converted;
+      else expense += converted;
+    });
     const balance = income + expense;
-    return { income, expense, balance };
-  }, [items]);
+    return {
+      income: Math.round(income * 100) / 100,
+      expense: Math.round(expense * 100) / 100,
+      balance: Math.round(balance * 100) / 100,
+    };
+  }, [filteredItems, rates, preferredCurrency]);
 
   // Build sparkline data from last 7 days of balances
   const sparklineData = useMemo(() => {
-    if (items.length === 0) return [0, 0];
-    const sorted = [...items].sort(
+    if (filteredItems.length === 0) return [0, 0];
+    const sorted = [...filteredItems].sort(
       (a, b) => new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime(),
     );
     let running = 0;
@@ -142,21 +180,21 @@ export default function HomeScreen({ navigation }: any) {
     });
     // Take last 8 points or all if fewer
     return points.length > 8 ? points.slice(-8) : points;
-  }, [items]);
+  }, [filteredItems]);
 
-  const recent = items.slice(0, 5);
+  const recent = filteredItems.slice(0, 5);
 
   // Load budget statuses
   useEffect(() => {
     (async () => {
       try {
-        const statuses = await BudgetService.getStatus();
+        const statuses = await BudgetService.getStatus(year, month, day);
         setAllBudgets(statuses);
       } catch {
         // silently fail
       }
     })();
-  }, [items]);
+  }, [filteredItems, year, month, day]);
 
   return (
     <ScrollView style={[styles.wrap, { backgroundColor: colors.bg }]} showsVerticalScrollIndicator={false}>
@@ -181,7 +219,7 @@ export default function HomeScreen({ navigation }: any) {
           <View>
             <AppText muted style={{ fontSize: 13, fontWeight: '500' }}>Total Balance</AppText>
             <AppText style={[styles.balanceAmount, { color: colors.text }]}>
-              {formatMoney(stats.balance)}
+              {formatMoney(stats.balance, preferredCurrency)}
             </AppText>
           </View>
           <View style={styles.sparklineWrap}>
@@ -197,7 +235,7 @@ export default function HomeScreen({ navigation }: any) {
             </View>
             <AppText muted style={{ fontSize: 11, marginLeft: 6 }}>Income</AppText>
             <AppText mono style={[styles.pillAmount, { color: colors.success }]}>
-              {formatMoney(stats.income)}
+              {formatMoney(stats.income, preferredCurrency)}
             </AppText>
           </View>
           <View style={[styles.pill, { backgroundColor: 'rgba(255,107,107,0.12)' }]}>
@@ -206,7 +244,7 @@ export default function HomeScreen({ navigation }: any) {
             </View>
             <AppText muted style={{ fontSize: 11, marginLeft: 6 }}>Expense</AppText>
             <AppText mono style={[styles.pillAmount, { color: colors.danger }]}>
-              {formatMoney(stats.expense)}
+              {formatMoney(stats.expense, preferredCurrency)}
             </AppText>
           </View>
         </View>
@@ -261,7 +299,7 @@ export default function HomeScreen({ navigation }: any) {
                   </View>
                 </View>
                 <AppText muted style={{ fontSize: 10, marginTop: 8 }}>
-                  {formatMoney(b.spent)} / {formatMoney(b.amount)} limit
+                  {formatMoney(b.spent, preferredCurrency)} / {formatMoney(b.amount, preferredCurrency)} limit
                 </AppText>
               </View>
             );
@@ -362,7 +400,7 @@ export default function HomeScreen({ navigation }: any) {
                   color: isIncome ? colors.success : colors.text,
                 }}
               >
-                {formatMoney(item.amount)}
+                {formatMoney(item.amount, item.currency || preferredCurrency)}
               </AppText>
             </Pressable>
           );

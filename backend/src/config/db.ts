@@ -34,9 +34,12 @@ export async function initDB() {
             user_id VARCHAR(255) NOT NULL,
             title VARCHAR(255) NOT NULL,
             amount DECIMAL(10,2) NOT NULL,
+            currency VARCHAR(10) NOT NULL DEFAULT 'LKR',
             category VARCHAR(255) NOT NULL,
             created_at DATE NOT NULL DEFAULT CURRENT_DATE
         )`;
+
+        await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS currency VARCHAR(10) NOT NULL DEFAULT 'LKR'`;
 
         await sql`CREATE TABLE IF NOT EXISTS categories(
             id SERIAL PRIMARY KEY,
@@ -52,22 +55,28 @@ export async function initDB() {
             user_id VARCHAR(255) NOT NULL,
             category VARCHAR(255) NOT NULL,
             amount DECIMAL(10,2) NOT NULL,
+            currency VARCHAR(10) NOT NULL DEFAULT 'LKR',
             period VARCHAR(20) NOT NULL DEFAULT 'monthly',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(user_id, category)
         )`;
+
+        await sql`ALTER TABLE budgets ADD COLUMN IF NOT EXISTS currency VARCHAR(10) NOT NULL DEFAULT 'LKR'`;
 
         await sql`CREATE TABLE IF NOT EXISTS recurring_transactions(
             id SERIAL PRIMARY KEY,
             user_id VARCHAR(255) NOT NULL,
             title VARCHAR(255) NOT NULL,
             amount DECIMAL(10,2) NOT NULL,
+            currency VARCHAR(10) NOT NULL DEFAULT 'LKR',
             category VARCHAR(255) NOT NULL,
             frequency VARCHAR(20) NOT NULL DEFAULT 'monthly',
             next_run DATE NOT NULL,
             is_active BOOLEAN NOT NULL DEFAULT true,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`;
+
+        await sql`ALTER TABLE recurring_transactions ADD COLUMN IF NOT EXISTS currency VARCHAR(10) NOT NULL DEFAULT 'LKR'`;
         console.log('Database initialized successfully')
     } catch (error) {
         console.error('Error initializing database', error)

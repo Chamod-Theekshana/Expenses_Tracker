@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import Icon from '../components/Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppTabs from './AppTabs';
 import AddTransactionScreen from '../views/app/AddTransactionScreen';
@@ -9,7 +10,6 @@ import CategoriesScreen from '../views/app/CategoriesScreen';
 import BudgetsScreen from '../views/app/BudgetsScreen';
 import RecurringScreen from '../views/app/RecurringScreen';
 import DateFilterBar from '../components/DateFilterBar';
-import AppText from '../components/AppText';
 import { ThemeContext } from '../store/theme';
 import { DateFilterContext } from '../store/dateFilter';
 
@@ -55,7 +55,7 @@ function TabsWithFilter() {
           },
         ]}
       >
-        <AppText style={{ fontSize: 14 }}>📅</AppText>
+        <Icon name="calendar" size={18} color={isOpen ? '#FFF' : colors.muted} />
         {hasActiveFilter && !isOpen && (
           <View style={[styles.fabDot, { backgroundColor: colors.accent }]} />
         )}

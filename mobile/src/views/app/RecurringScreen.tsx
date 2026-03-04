@@ -11,6 +11,7 @@ import { CategoryService, Category } from '../../services/CategoryService';
 import { DateFilterContext } from '../../store/dateFilter';
 import { formatMoney } from '../../utils/money';
 import { scaleHeight } from '../../constants/size';
+import Icon from '../../components/Icon';
 
 const FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'] as const;
 
@@ -132,7 +133,7 @@ export default function RecurringScreen({ navigation }: any) {
       <View style={styles.topRow}>
         <AppText title>Recurring</AppText>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '600' }}>Close</AppText>
+          <Icon name="x" size={24} color={colors.muted} />
         </Pressable>
       </View>
 

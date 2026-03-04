@@ -10,6 +10,7 @@ import { BudgetService, BudgetStatus } from '../../services/BudgetService';
 import { CategoryService, Category } from '../../services/CategoryService';
 import { DateFilterContext } from '../../store/dateFilter';
 import { formatMoney } from '../../utils/money';
+import Icon from '../../components/Icon';
 import { scaleHeight } from '../../constants/size';
 import { ProfileContext } from '../../store/profile';
 
@@ -128,7 +129,7 @@ export default function BudgetsScreen({ navigation }: any) {
       <View style={styles.topRow}>
         <AppText title>Budgets</AppText>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '600' }}>Close</AppText>
+          <Icon name="x" size={24} color={colors.muted} />
         </Pressable>
       </View>
 

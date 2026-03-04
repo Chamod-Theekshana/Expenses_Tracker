@@ -61,3 +61,46 @@ export const typography = {
   caption: { fontSize: 13, lineHeight: 18, fontWeight: '500' as const },
   small: { fontSize: 11, lineHeight: 16, fontWeight: '500' as const },
 };
+
+// ── 4-point spacing grid (additive — does not replace `spacing`) ──
+export const space = {
+  '4': 4,
+  '8': 8,
+  '12': 12,
+  '16': 16,
+  '24': 24,
+  '32': 32,
+} as const;
+
+// ── Shadows (iOS + Android) ────────────────────────────────────
+export const shadows = {
+  sm: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  md: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  lg: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+} as const;
+
+// ── Motion timing constants ─────────────────────────────────────
+export const motion = {
+  fast: 200,
+  normal: 300,
+  slow: 450,
+} as const;
+

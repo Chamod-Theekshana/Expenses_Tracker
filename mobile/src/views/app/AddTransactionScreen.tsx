@@ -4,6 +4,8 @@ import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
 import AppButton from '../../components/AppButton';
 import Card from '../../components/Card';
+import Icon from '../../components/Icon';
+import { getCategoryMeta } from '../../constants/categories';
 import { spacing, radius } from '../../theme/colors';
 import { TransactionsContext, Tx } from '../../store/transactions';
 import { AuthContext } from '../../store/auth';
@@ -80,6 +82,18 @@ export default function AddTransactionScreen({ navigation }: any) {
       setSaving(false);
     }
   };
+
+  // Date quick presets
+  const setToday = () => setDateISO(new Date().toISOString().slice(0, 10));
+  const setYesterday = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    setDateISO(d.toISOString().slice(0, 10));
+  };
+  const isToday = dateISO === new Date().toISOString().slice(0, 10);
+  const yesterdayStr = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+  const isYesterday = dateISO === yesterdayStr;
+
   const Wrapper = isIncome ? View : ScrollView;
 
   return (
@@ -87,7 +101,7 @@ export default function AddTransactionScreen({ navigation }: any) {
       <View style={styles.topRow}>
         <AppText title>Add</AppText>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '600' }}>Close</AppText>
+          <Icon name="x" size={24} color={colors.muted} />
         </Pressable>
       </View>
 
@@ -112,9 +126,39 @@ export default function AddTransactionScreen({ navigation }: any) {
         <View style={{ height: 18 }} />
 
         <AppText muted style={{ marginBottom: 10, fontSize: 13 }}>
-          Date (YYYY-MM-DD)
+          Date
         </AppText>
-        <AppInput value={dateISO} onChangeText={setDateISO} placeholder="2026-02-27" />
+        {/* Date quick presets */}
+        <View style={styles.dateRow}>
+          <Pressable
+            onPress={setToday}
+            style={[
+              styles.datePreset,
+              { backgroundColor: colors.surface2, borderColor: colors.border },
+              isToday && { backgroundColor: colors.accent, borderColor: colors.accent },
+            ]}
+          >
+            <AppText style={{ fontWeight: '600', fontSize: 13, color: isToday ? '#FFF' : colors.text }}>Today</AppText>
+          </Pressable>
+          <Pressable
+            onPress={setYesterday}
+            style={[
+              styles.datePreset,
+              { backgroundColor: colors.surface2, borderColor: colors.border },
+              isYesterday && { backgroundColor: colors.accent, borderColor: colors.accent },
+            ]}
+          >
+            <AppText style={{ fontWeight: '600', fontSize: 13, color: isYesterday ? '#FFF' : colors.text }}>Yesterday</AppText>
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <AppInput
+              value={dateISO}
+              onChangeText={setDateISO}
+              placeholder="YYYY-MM-DD"
+              style={{ fontSize: 13 }}
+            />
+          </View>
+        </View>
 
         <View style={{ height: 18 }} />
 
@@ -132,7 +176,7 @@ export default function AddTransactionScreen({ navigation }: any) {
                 currency === cur && { backgroundColor: colors.accent, borderColor: colors.accent },
               ]}
             >
-              <AppText style={{ fontWeight: '700', fontSize: 13, color: currency === cur ? '#000' : colors.text }}>
+              <AppText style={{ fontWeight: '700', fontSize: 13, color: currency === cur ? '#FFF' : colors.text }}>
                 {cur}
               </AppText>
             </Pressable>
@@ -140,15 +184,29 @@ export default function AddTransactionScreen({ navigation }: any) {
         </View>
 
         <View style={{ height: 18 }} />
-      
+
         <View style={styles.chipsRow}>
-          <Pressable onPress={() => setIsIncome(false)} style={[styles.chip, { backgroundColor: colors.surface2, borderColor: colors.border }, !isIncome && { backgroundColor: colors.danger, borderColor: 'transparent' }]}>
-            <AppText style={{ fontSize: 18, marginBottom: 2 }}>↙</AppText>
-            <AppText style={{ fontWeight: '700', fontSize: 13, color: !isIncome ? '#FFF' : colors.text }}>Expense</AppText>
+          <Pressable
+            onPress={() => setIsIncome(false)}
+            style={[
+              styles.chip,
+              { backgroundColor: colors.surface2, borderColor: colors.border },
+              !isIncome && { backgroundColor: colors.danger, borderColor: 'transparent' },
+            ]}
+          >
+            <Icon name="trending-down" size={18} color={!isIncome ? '#FFF' : colors.danger} />
+            <AppText style={{ fontWeight: '700', fontSize: 13, color: !isIncome ? '#FFF' : colors.text, marginTop: 2 }}>Expense</AppText>
           </Pressable>
-          <Pressable onPress={() => setIsIncome(true)} style={[styles.chip, { backgroundColor: colors.surface2, borderColor: colors.border }, isIncome && { backgroundColor: colors.success, borderColor: 'transparent' }]}>
-            <AppText style={{ fontSize: 18, marginBottom: 2 }}>↗</AppText>
-            <AppText style={{ fontWeight: '700', fontSize: 13, color: isIncome ? '#FFF' : colors.text }}>Income</AppText>
+          <Pressable
+            onPress={() => setIsIncome(true)}
+            style={[
+              styles.chip,
+              { backgroundColor: colors.surface2, borderColor: colors.border },
+              isIncome && { backgroundColor: colors.success, borderColor: 'transparent' },
+            ]}
+          >
+            <Icon name="trending-up" size={18} color={isIncome ? '#FFF' : colors.success} />
+            <AppText style={{ fontWeight: '700', fontSize: 13, color: isIncome ? '#FFF' : colors.text, marginTop: 2 }}>Income</AppText>
           </Pressable>
         </View>
 
@@ -163,15 +221,24 @@ export default function AddTransactionScreen({ navigation }: any) {
                     .filter((c) => c.type === 'expense' || c.type === 'both')
                     .map((c) => c.name)
                 : fallbackExpenseCategories
-              ).map((c) => (
+              ).map((c) => {
+                const meta = getCategoryMeta(c);
+                const isActive = category === c;
+                return (
                   <Pressable
                     key={c}
                     onPress={() => setCategory(c)}
-                    style={[styles.cat, { backgroundColor: colors.surface2, borderColor: colors.border }, category === c && { backgroundColor: colors.accent, borderColor: colors.accent }]}
+                    style={[
+                      styles.cat,
+                      { backgroundColor: colors.surface2, borderColor: colors.border },
+                      isActive && { backgroundColor: meta.color, borderColor: meta.color },
+                    ]}
                   >
-                    <AppText style={{ fontWeight: '600', fontSize: 14, color: category === c ? '#FFF' : colors.text }}>{c}</AppText>
+                    <Icon name={meta.icon} size={16} color={isActive ? '#FFF' : meta.color} />
+                    <AppText style={{ fontWeight: '600', fontSize: 13, color: isActive ? '#FFF' : colors.text, marginLeft: 6 }}>{c}</AppText>
                   </Pressable>
-                ))}
+                );
+              })}
             </View>
             {!cats.length && !catLoading ? (
               <AppText muted style={{ marginTop: 10, fontSize: 12 }}>
@@ -217,8 +284,10 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   cat: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: radius.md,
     borderWidth: 1,
   },
@@ -229,5 +298,16 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  dateRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  datePreset: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: radius.md,
+    borderWidth: 1,
   },
 });

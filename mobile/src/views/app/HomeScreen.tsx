@@ -11,7 +11,8 @@ import { DateFilterContext } from '../../store/dateFilter';
 import { formatMoney } from '../../utils/money';
 import { scaleHeight } from '../../constants/size';
 import { ThemeContext } from '../../store/theme';
-import { images } from '../../constants/images';
+import Icon from '../../components/Icon';
+import { getCategoryMeta } from '../../constants/categories';
 import { BudgetService, BudgetStatus } from '../../services/BudgetService';
 import { ExchangeRateService } from '../../services/ExchangeRateService';
 
@@ -112,7 +113,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 function getCategoryColor(category: string): string {
-  return CATEGORY_COLORS[category] || '#6C5CE7';
+  return getCategoryMeta(category).color;
 }
 
 export default function HomeScreen({ navigation }: any) {
@@ -231,7 +232,7 @@ export default function HomeScreen({ navigation }: any) {
         <View style={styles.pillRow}>
           <View style={[styles.pill, { backgroundColor: 'rgba(46,213,115,0.12)' }]}>
             <View style={[styles.pillDot, { backgroundColor: colors.success }]}>
-              <AppText style={{ fontSize: 10, color: '#FFF' }}>↗</AppText>
+              <Icon name="trending-up" size={12} color="#FFF" />
             </View>
             <AppText muted style={{ fontSize: 11, marginLeft: 6 }}>Income</AppText>
             <AppText mono style={[styles.pillAmount, { color: colors.success }]}>
@@ -240,7 +241,7 @@ export default function HomeScreen({ navigation }: any) {
           </View>
           <View style={[styles.pill, { backgroundColor: 'rgba(255,107,107,0.12)' }]}>
             <View style={[styles.pillDot, { backgroundColor: colors.danger }]}>
-              <AppText style={{ fontSize: 10, color: '#FFF' }}>↙</AppText>
+              <Icon name="trending-down" size={12} color="#FFF" />
             </View>
             <AppText muted style={{ fontSize: 11, marginLeft: 6 }}>Expense</AppText>
             <AppText mono style={[styles.pillAmount, { color: colors.danger }]}>
@@ -254,7 +255,10 @@ export default function HomeScreen({ navigation }: any) {
       <View style={styles.sectionRow}>
         <AppText style={styles.sectionTitle}>Budget Overview</AppText>
         <Pressable onPress={() => navigation.getParent()?.navigate('Budgets')} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>Manage →</AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>Manage</AppText>
+            <Icon name="chevron-right" size={14} color={colors.accent} />
+          </View>
         </Pressable>
       </View>
 
@@ -279,7 +283,7 @@ export default function HomeScreen({ navigation }: any) {
                   <AppText style={{ fontWeight: '600', fontSize: 14, flex: 1 }} numberOfLines={1}>
                     {b.category}
                   </AppText>
-                  {isOver && <AppText style={{ fontSize: 14 }}>⚠️</AppText>}
+                  {isOver && <Icon name="alert-triangle" size={16} color={colors.warning} />}
                 </View>
                 <View style={styles.budgetRingRow}>
                   <CircularProgress
@@ -308,7 +312,7 @@ export default function HomeScreen({ navigation }: any) {
       ) : (
         <Pressable onPress={() => navigation.getParent()?.navigate('Budgets')}>
           <View style={[styles.emptyBudgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <AppText style={{ fontSize: 28, marginBottom: 6 }}>💰</AppText>
+            <Icon name="wallet" size={28} color={colors.accent} />
             <AppText style={{ fontWeight: '600', fontSize: 14 }}>No budgets set yet</AppText>
             <AppText muted style={{ fontSize: 12, marginTop: 4, textAlign: 'center' }}>
               Set monthly limits per category to track spending
@@ -323,7 +327,7 @@ export default function HomeScreen({ navigation }: any) {
       {/* ─── Auto-repeat (Recurring) ─── */}
       <Pressable onPress={() => navigation.getParent()?.navigate('Recurring')}>
         <View style={[styles.recurringCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <AppText style={{ fontSize: 28, marginBottom: 6 }}>🔄</AppText>
+          <Icon name="repeat" size={28} color={colors.accent} />
           <AppText style={{ fontWeight: '700', fontSize: 15 }}>Auto-repeat transactions</AppText>
           <AppText muted style={{ fontSize: 12, marginTop: 4, textAlign: 'center', lineHeight: 18 }}>
             Set up daily, weekly, monthly or yearly recurring expenses & income
@@ -341,7 +345,10 @@ export default function HomeScreen({ navigation }: any) {
       <View style={styles.sectionRow}>
         <AppText style={styles.sectionTitle}>Recent Transactions</AppText>
         <Pressable onPress={() => navigation.navigate('Transactions')} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>View all →</AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>View all</AppText>
+            <Icon name="chevron-right" size={14} color={colors.accent} />
+          </View>
         </Pressable>
       </View>
 
@@ -373,9 +380,11 @@ export default function HomeScreen({ navigation }: any) {
             >
               {/* Category icon circle */}
               <View style={[styles.txIcon, { backgroundColor: catColor + '20' }]}>
-                <AppText style={{ fontSize: 14, fontWeight: '800', color: catColor }}>
-                  {item.category.charAt(0).toUpperCase()}
-                </AppText>
+                <Icon
+                  name={getCategoryMeta(item.category).icon}
+                  size={18}
+                  color={catColor}
+                />
               </View>
 
               {/* Title + Category + Date */}

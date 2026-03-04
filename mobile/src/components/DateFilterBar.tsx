@@ -8,6 +8,7 @@ import {
   PanResponder,
 } from 'react-native';
 import AppText from './AppText';
+import Icon from './Icon';
 import { DateFilterContext } from '../store/dateFilter';
 import { TransactionsContext } from '../store/transactions';
 import { ThemeContext } from '../store/theme';
@@ -117,17 +118,23 @@ export default function DateFilterBar() {
       <Animated.View style={[styles.panel, { opacity: contentOpacity }]} pointerEvents={isOpen ? 'auto' : 'none'}>
         {/* Header */}
         <View style={styles.panelHeader}>
-          <AppText style={{ fontWeight: '700', fontSize: 15, color: colors.text }}>
-            📅 {filterLabel}
-          </AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Icon name="calendar" size={16} color={colors.text} />
+            <AppText style={{ fontWeight: '700', fontSize: 15, color: colors.text }}>
+              {filterLabel}
+            </AppText>
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             {hasActiveFilter && (
               <Pressable onPress={clearFilter} hitSlop={12} style={[styles.clearBtn, { borderColor: colors.danger + '33' }]}>
-                <AppText style={{ fontSize: 11, fontWeight: '700', color: colors.danger }}>✕ Clear</AppText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Icon name="x" size={12} color={colors.danger} />
+                  <AppText style={{ fontSize: 11, fontWeight: '700', color: colors.danger }}>Clear</AppText>
+                </View>
               </Pressable>
             )}
             <Pressable onPress={() => setIsOpen(false)} hitSlop={12}>
-              <AppText style={{ fontSize: 18, color: colors.muted }}>✕</AppText>
+              <Icon name="x" size={20} color={colors.muted} />
             </Pressable>
           </View>
         </View>

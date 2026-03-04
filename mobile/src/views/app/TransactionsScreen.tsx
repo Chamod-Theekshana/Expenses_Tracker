@@ -7,6 +7,7 @@ import { TransactionsContext } from '../../store/transactions';
 import { DateFilterContext } from '../../store/dateFilter';
 import { AuthContext } from '../../store/auth';
 import TransactionItem from '../../components/TransactionItem';
+import Icon from '../../components/Icon';
 import { ThemeContext } from '../../store/theme';
 import { scaleHeight } from '../../constants/size';
 
@@ -107,7 +108,7 @@ export default function TransactionsScreen() {
 
       {/* Search Bar */}
       <View style={[styles.searchWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <AppText style={{ fontSize: 16, color: colors.muted }}>🔍</AppText>
+        <Icon name="search" size={18} color={colors.muted} />
         <TextInput
           value={search}
           onChangeText={setSearch}
@@ -118,7 +119,7 @@ export default function TransactionsScreen() {
         />
         {search.length > 0 && (
           <Pressable onPress={() => setSearch('')} hitSlop={10}>
-            <AppText style={{ fontSize: 16, color: colors.muted }}>✕</AppText>
+            <Icon name="x" size={18} color={colors.muted} />
           </Pressable>
         )}
       </View>
@@ -157,9 +158,12 @@ export default function TransactionsScreen() {
           onPress={() => setSortNewest(!sortNewest)}
           style={[styles.sortBtn, { backgroundColor: colors.surface2, borderColor: colors.border }]}
         >
-          <AppText style={{ fontWeight: '600', fontSize: 12, color: colors.text }}>
-            {sortNewest ? '↓ Newest' : '↑ Oldest'}
-          </AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Icon name="arrow-down-up" size={14} color={colors.text} />
+            <AppText style={{ fontWeight: '600', fontSize: 12, color: colors.text }}>
+              {sortNewest ? 'Newest' : 'Oldest'}
+            </AppText>
+          </View>
         </Pressable>
       </View>
 
@@ -198,9 +202,12 @@ export default function TransactionsScreen() {
       {/* Clear Filters */}
       {hasFilters && (
         <Pressable onPress={clearFilters} style={styles.clearBtn}>
-          <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>
-            ✕ Clear filters
-          </AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Icon name="x" size={14} color={colors.accent} />
+            <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>
+              Clear filters
+            </AppText>
+          </View>
         </Pressable>
       )}
 
@@ -225,8 +232,8 @@ export default function TransactionsScreen() {
           <View style={{ paddingTop: 30, alignItems: 'center' }}>
             {hasFilters ? (
               <>
-                <AppText style={{ fontSize: 28, marginBottom: 8 }}>🔍</AppText>
-                <AppText muted>No transactions match your filters.</AppText>
+                <Icon name="search" size={28} color={colors.muted} />
+                <AppText muted style={{ marginTop: 8 }}>No transactions match your filters.</AppText>
                 <Pressable onPress={clearFilters} style={{ marginTop: 12 }}>
                   <AppText style={{ color: colors.accent, fontWeight: '600' }}>Clear filters</AppText>
                 </Pressable>

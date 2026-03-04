@@ -8,6 +8,7 @@ import { ThemeContext } from '../../store/theme';
 import { spacing, radius } from '../../theme/colors';
 import { Category, CategoryService } from '../../services/CategoryService';
 import { scaleHeight } from '../../constants/size';
+import Icon from '../../components/Icon';
 
 export default function CategoriesScreen({ navigation }: any) {
   const { colors } = useContext(ThemeContext);
@@ -73,7 +74,7 @@ export default function CategoriesScreen({ navigation }: any) {
       <View style={styles.topRow}>
         <AppText title>Categories</AppText>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '600' }}>Close</AppText>
+          <Icon name="x" size={24} color={colors.muted} />
         </Pressable>
       </View>
 

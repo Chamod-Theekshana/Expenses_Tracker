@@ -4,20 +4,20 @@ import HomeScreen from '../views/app/HomeScreen';
 import TransactionsScreen from '../views/app/TransactionsScreen';
 import ProfileScreen from '../views/app/ProfileScreen';
 import ChartsScreen from '../views/app/ChartsScreen';
-import { View, Animated, StyleSheet, Image } from 'react-native';
+import { View, Animated, StyleSheet, Pressable } from 'react-native';
 import AppText from '../components/AppText';
+import Icon, { type IconName } from '../components/Icon';
 import { scaleHeight } from '../constants/size';
-import AddTransactionScreen from '../views/app/AddTransactionScreen';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { images } from '../constants/images';
 import { ThemeContext } from '../store/theme';
+import { useNavigation } from '@react-navigation/native';
 
 export type AppTabParamList = {
   Home: undefined;
   Transactions: undefined;
-  Add: undefined;
-  Profile: undefined;
+  AddPlaceholder: undefined;
   Charts: undefined;
+  Profile: undefined;
 };
 
 const Tab = createBottomTabNavigator<AppTabParamList>();
@@ -41,6 +41,71 @@ function Label({ title, focused, accentColor, mutedColor }: { title: string; foc
       </AppText>
     </Animated.View>
   );
+}
+
+function TabIcon({ icon, title, focused, colors }: { icon: IconName; title: string; focused: boolean; colors: any }) {
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Icon name={icon} size={24} color={focused ? colors.accent : colors.muted} />
+      <Label title={title} focused={focused} accentColor={colors.accent} mutedColor={colors.muted} />
+    </View>
+  );
+}
+
+/** Center FAB that opens the AddTx modal from the parent stack */
+function AddTabButton() {
+  const navigation: any = useNavigation();
+  const { colors } = useContext(ThemeContext);
+  const scale = React.useRef(new Animated.Value(1)).current;
+
+  const onPressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.92,
+      useNativeDriver: true,
+      tension: 120,
+      friction: 8,
+    }).start();
+  };
+
+  const onPressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 80,
+      friction: 6,
+    }).start();
+  };
+
+  return (
+    <Pressable
+      onPress={() => navigation.getParent()?.navigate('AddTx')}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      style={styles.addTouchable}
+    >
+      <Animated.View
+        style={[
+          styles.addButton,
+          {
+            transform: [{ scale }],
+            backgroundColor: colors.accent,
+            shadowColor: colors.accent,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.35,
+            shadowRadius: 10,
+            elevation: 10,
+          },
+        ]}
+      >
+        <Icon name="plus" size={28} color="#FFF" strokeWidth={2.5} />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+/** Empty placeholder component — never rendered (tab is intercepted by AddTabButton) */
+function EmptyScreen() {
+  return null;
 }
 
 export default function AppTabs() {
@@ -71,10 +136,7 @@ export default function AppTabs() {
         component={HomeScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <View style={{ alignItems: 'center' }}>
-              <Image source={images.home} style={{ width: 24, height: 24, tintColor: focused ? colors.accent : colors.muted }} />
-              <Label title="Home" focused={focused} accentColor={colors.accent} mutedColor={colors.muted} />
-            </View>
+            <TabIcon icon="home" title="Home" focused={focused} colors={colors} />
           ),
         }}
       />
@@ -83,46 +145,19 @@ export default function AppTabs() {
         component={TransactionsScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <View style={{ alignItems: 'center' }}>
-              <Image source={images.activity} style={{ width: 24, height: 24, tintColor: focused ? colors.accent : colors.muted }} />
-              <Label title="Activity" focused={focused} accentColor={colors.accent} mutedColor={colors.muted} />
-            </View>
+            <TabIcon icon="activity" title="Activity" focused={focused} colors={colors} />
           ),
         }}
       />
       <Tab.Screen
-        name="Add"
-        component={AddTransactionScreen}
+        name="AddPlaceholder"
+        component={EmptyScreen}
         options={{
-          tabBarIcon: ({ focused }) => {
-            const scale = React.useRef(new Animated.Value(1)).current;
-
-            React.useEffect(() => {
-              Animated.spring(scale, {
-                toValue: focused ? 1.05 : 1,
-                useNativeDriver: true,
-                tension: 80,
-                friction: 6,
-              }).start();
-            }, [focused]);
-
-            return (
-              <Animated.View style={{ transform: [{ scale }] }}>
-                <View style={[
-                  styles.addButton,
-                  {
-                    backgroundColor: colors.accent,
-                    shadowColor: colors.accent,
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.35,
-                    shadowRadius: 10,
-                    elevation: 10,
-                  },
-                ]}>
-                  <AppText style={{ color: '#FFF', fontWeight: '800', fontSize: 24 }}>＋</AppText>
-                </View>
-              </Animated.View>
-            );
+          tabBarButton: () => <AddTabButton />,
+        }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
           },
         }}
       />
@@ -131,10 +166,7 @@ export default function AppTabs() {
         component={ChartsScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <View style={{ alignItems: 'center' }}>
-              <Image source={images.chart} style={{ width: 24, height: 24, tintColor: focused ? colors.accent : colors.muted }} />
-              <Label title="Charts" focused={focused} accentColor={colors.accent} mutedColor={colors.muted} />
-            </View>
+            <TabIcon icon="chart" title="Charts" focused={focused} colors={colors} />
           ),
         }}
       />
@@ -143,10 +175,7 @@ export default function AppTabs() {
         component={ProfileScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <View style={{ alignItems: 'center' }}>
-              <Image source={images.profile} style={{ width: 24, height: 24, tintColor: focused ? colors.accent : colors.muted }} />
-              <Label title="Profile" focused={focused} accentColor={colors.accent} mutedColor={colors.muted} />
-            </View>
+            <TabIcon icon="profile" title="Profile" focused={focused} colors={colors} />
           ),
         }}
       />
@@ -155,6 +184,11 @@ export default function AppTabs() {
 }
 
 const styles = StyleSheet.create({
+  addTouchable: {
+    top: -16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   addButton: {
     width: 56,
     height: 56,

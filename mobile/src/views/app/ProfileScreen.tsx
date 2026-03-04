@@ -8,6 +8,7 @@ import AppPicker from "../../components/AppPicker";
 import CloudinaryPhotoPicker from "../../components/CloudinaryPhotoPicker";
 import CustomSwitch from "../../components/Switch";
 import { spacing, radius } from "../../theme/colors";
+import Icon from '../../components/Icon';
 import { AuthContext } from "../../store/auth";
 import { ThemeContext } from "../../store/theme";
 import { ProfileContext } from "../../store/profile";
@@ -214,7 +215,7 @@ export default function ProfileScreen({ navigation }: any) {
                 <AppText style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>Manage Budgets</AppText>
                 <AppText muted style={{ fontSize: 12, marginTop: 2 }}>Set monthly spending limits per category</AppText>
               </View>
-              <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 16 }}>→</AppText>
+              <Icon name="chevron-right" size={18} color={colors.accent} />
             </View>
           </Pressable>
 
@@ -226,7 +227,7 @@ export default function ProfileScreen({ navigation }: any) {
                 <AppText style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>Recurring Transactions</AppText>
                 <AppText muted style={{ fontSize: 12, marginTop: 2 }}>Auto-repeat daily, weekly, monthly expenses</AppText>
               </View>
-              <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 16 }}>→</AppText>
+              <Icon name="chevron-right" size={18} color={colors.accent} />
             </View>
           </Pressable>
         </Card>

@@ -9,6 +9,7 @@ import { TransactionsContext, Tx } from '../../store/transactions';
 import { AuthContext } from '../../store/auth';
 import { spacing } from '../../theme/colors';
 import { scaleHeight } from '../../constants/size';
+import Icon from '../../components/Icon';
 
 export default function TransactionDetailScreen({ route, navigation }: any) {
   const { tx }: { tx: Tx } = route.params;
@@ -44,6 +45,7 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
           title: title.trim(),
           category: category.trim() || 'Other',
           amount: isIncome ? amount : -amount,
+          currency: tx.currency || 'LKR',
           dateISO,
         },
         userId!,
@@ -82,7 +84,7 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
       <View style={styles.topRow}>
         <AppText title>Transaction</AppText>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
-          <AppText style={{ color: colors.accent, fontWeight: '600' }}>Close</AppText>
+          <Icon name="x" size={24} color={colors.muted} />
         </Pressable>
       </View>
 

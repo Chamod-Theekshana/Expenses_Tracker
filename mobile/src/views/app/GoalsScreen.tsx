@@ -202,7 +202,25 @@ function GoalFormModal({
     }
   }, [visible, initial]);
 
-  const canSave = name.trim().length >= 2 && Number(targetRaw) > 0;
+  const isValidDate = () => {
+    if (!deadline) return true;
+    const d = new Date(deadline);
+    if (isNaN(d.getTime())) return false; // invalid format
+    
+    // Create 'today' at midnight to allow setting a deadline for today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    return d.getTime() >= today.getTime();
+  };
+
+  const isFormatCorrect = !deadline || /^\d{4}-\d{2}-\d{2}$/.test(deadline);
+
+  const canSave = 
+    name.trim().length >= 2 && 
+    Number(targetRaw) > 0 && 
+    isFormatCorrect && 
+    isValidDate();
 
   const handle = async () => {
     if (!canSave) return;
@@ -247,7 +265,17 @@ function GoalFormModal({
 
           <View style={{ height: 14 }} />
           <AppText muted style={{ fontSize: 13, marginBottom: 8 }}>Deadline (optional, YYYY-MM-DD)</AppText>
-          <AppInput value={deadline} onChangeText={setDeadline} placeholder="e.g. 2025-12-31" />
+          <AppInput 
+            value={deadline} 
+            onChangeText={setDeadline} 
+            placeholder="e.g. 2026-12-31" 
+            style={deadline && !isFormatCorrect ? { borderColor: colors.danger } : {}}
+          />
+          {deadline && !isValidDate() && isFormatCorrect && (
+            <AppText style={{ color: colors.danger, fontSize: 11, marginTop: 4 }}>
+              Deadline cannot be in the past
+            </AppText>
+          )}
 
           <AppButton title={initial ? 'Update Goal' : 'Create Goal'} onPress={handle} disabled={!canSave} loading={saving} style={{ marginTop: 20 }} />
         </View>

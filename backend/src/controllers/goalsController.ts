@@ -24,6 +24,9 @@ export async function createGoal(req: AuthedRequest, res: any) {
     if (!target_amount || isNaN(Number(target_amount)) || Number(target_amount) <= 0) {
       return res.status(400).json({ message: 'target_amount must be a positive number' });
     }
+    if (deadline && new Date(deadline).getTime() < new Date().setHours(0,0,0,0)) {
+        return res.status(400).json({ message: 'Deadline cannot be in the past' });
+    }
 
     const goal = await GoalModel.create(
       userId,
@@ -51,6 +54,9 @@ export async function updateGoal(req: AuthedRequest, res: any) {
     }
     if (!target_amount || isNaN(Number(target_amount)) || Number(target_amount) <= 0) {
       return res.status(400).json({ message: 'target_amount must be a positive number' });
+    }
+    if (deadline && new Date(deadline).getTime() < new Date().setHours(0,0,0,0)) {
+        return res.status(400).json({ message: 'Deadline cannot be in the past' });
     }
 
     const goal = await GoalModel.update(userId, id, name.trim(), Number(target_amount), currency || 'LKR', deadline || null);

@@ -1,4 +1,5 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, StyleSheet, Pressable, Image, ScrollView, Dimensions } from 'react-native';
 import Svg, { Circle, Polyline, Defs, LinearGradient, Stop } from 'react-native-svg';
 import AppText from '../../components/AppText';
@@ -17,6 +18,7 @@ import { getCategoryMeta } from '../../constants/categories';
 import { BudgetService, BudgetStatus } from '../../services/BudgetService';
 import { ExchangeRateService } from '../../services/ExchangeRateService';
 import { RecurringService, RecurringRule } from '../../services/RecurringService';
+import { GoalService, Goal } from '../../services/GoalService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -129,6 +131,7 @@ export default function HomeScreen({ navigation }: any) {
   const [allBudgets, setAllBudgets] = useState<BudgetStatus[]>([]);
   const [rates, setRates] = useState<Record<string, number>>({});
   const [upcomingBills, setUpcomingBills] = useState<RecurringRule[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
 
   // Fetch exchange rates for conversion
   useEffect(() => {
@@ -210,32 +213,30 @@ export default function HomeScreen({ navigation }: any) {
     return null;
   }, [filteredItems, preferredCurrency, convertAmount]);
 
-  // Load budget statuses
-  useEffect(() => {
-    (async () => {
-      try {
-        const statuses = await BudgetService.getStatus(year, month, day);
-        setAllBudgets(statuses);
-      } catch {
-        // silently fail
-      }
-    })();
-  }, [filteredItems, year, month, day]);
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const statuses = await BudgetService.getStatus(year, month, day);
+          setAllBudgets(statuses);
+        } catch {}
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const rules = await RecurringService.list();
-        const activeBills = rules
-          .filter(r => r.is_active && r.amount < 0)
-          .sort((a, b) => new Date(a.next_run).getTime() - new Date(b.next_run).getTime())
-          .slice(0, 3);
-        setUpcomingBills(activeBills);
-      } catch {
-        // silently fail
-      }
-    })();
-  }, [items]); // Re-fetch when items change to stay relatively fresh
+        try {
+          const rules = await RecurringService.list();
+          const activeBills = rules
+            .filter(r => r.is_active && r.amount < 0)
+            .sort((a, b) => new Date(a.next_run).getTime() - new Date(b.next_run).getTime())
+            .slice(0, 3);
+          setUpcomingBills(activeBills);
+        } catch {}
+
+        try {
+          const goalsList = await GoalService.list();
+          setGoals(goalsList.filter(g => !g.is_completed));
+        } catch {}
+      })();
+    }, [filteredItems, year, month, day])
+  );
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -391,40 +392,72 @@ export default function HomeScreen({ navigation }: any) {
         </Pressable>
       )}
 
-      {/* ─── Auto-repeat (Recurring) ─── */}
-      <Pressable onPress={() => navigation.getParent()?.navigate('Recurring')}>
-        <View style={[styles.recurringCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Icon name="repeat" size={28} color={colors.accent} />
-          <AppText style={{ fontWeight: '700', fontSize: 15 }}>Auto-repeat transactions</AppText>
-          <AppText muted style={{ fontSize: 12, marginTop: 4, textAlign: 'center', lineHeight: 18 }}>
-            Set up daily, weekly, monthly or yearly recurring expenses & income
-          </AppText>
-          <AppText style={{ color: colors.accent, fontWeight: '700', fontSize: 14, marginTop: 10 }}>
-            + Add Recurring
-          </AppText>
-          <AppText muted style={{ fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>
-            e.g., Rent, Netflix, Gym
-          </AppText>
-        </View>
-      </Pressable>
+      {/* ─── Savings Goals Overview ─── */}
+      <View style={styles.sectionRow}>
+        <AppText style={styles.sectionTitle}>Savings Goals</AppText>
+        <Pressable onPress={() => navigation.getParent()?.navigate('Goals')} hitSlop={10}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>Manage</AppText>
+            <Icon name="chevron-right" size={14} color={colors.accent} />
+          </View>
+        </Pressable>
+      </View>
 
-      {/* ─── Savings Goals ─── */}
-      <Pressable onPress={() => navigation.getParent()?.navigate('Goals')}>
-        <View style={[styles.recurringCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Icon name="target" size={28} color={colors.success} />
-          <AppText style={{ fontWeight: '700', fontSize: 15 }}>Savings Goals</AppText>
-          <AppText muted style={{ fontSize: 12, marginTop: 4, textAlign: 'center', lineHeight: 18 }}>
-            Set savings targets and track your progress with visual rings
-          </AppText>
-          <AppText style={{ color: colors.success, fontWeight: '700', fontSize: 14, marginTop: 10 }}>
-            + Add Goal
-          </AppText>
-          <AppText muted style={{ fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>
-            e.g., Vacation, Emergency Fund, New Car
-          </AppText>
-        </View>
-      </Pressable>
-      
+      {goals.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.budgetScroll}
+        >
+          {goals.map((g) => {
+            const clampedPct = Math.min(g.progress_percentage || 0, 100);
+            return (
+              <View
+                key={g.id}
+                style={[styles.budgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
+                <View style={styles.budgetCardHeader}>
+                  <AppText style={{ fontWeight: '600', fontSize: 14, flex: 1 }} numberOfLines={1}>
+                    {g.name}
+                  </AppText>
+                  {clampedPct >= 100 && <Icon name="party-popper" size={16} color={colors.success} />}
+                </View>
+                <View style={styles.budgetRingRow}>
+                  <CircularProgress
+                    percentage={clampedPct}
+                    size={64}
+                    strokeWidth={6}
+                    trackColor={colors.surface2}
+                    progressColor={colors.success}
+                  />
+                  <View style={styles.budgetStats}>
+                    <AppText style={{ fontWeight: '800', fontSize: 16, color: colors.success }}>
+                      {Math.round(clampedPct)}%
+                    </AppText>
+                  </View>
+                </View>
+                <AppText muted style={{ fontSize: 10, marginTop: 8 }}>
+                  {formatMoney(g.current_amount, g.currency)} / {formatMoney(g.target_amount, g.currency)}
+                </AppText>
+              </View>
+            );
+          })}
+        </ScrollView>
+      ) : (
+        <Pressable onPress={() => navigation.getParent()?.navigate('Goals')}>
+          <View style={[styles.emptyBudgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Icon name="target" size={28} color={colors.accent} />
+            <AppText style={{ fontWeight: '600', fontSize: 14, marginTop: 8 }}>No active goals</AppText>
+            <AppText muted style={{ fontSize: 12, marginTop: 4, textAlign: 'center' }}>
+              Create a savings goal to track your progress
+            </AppText>
+            <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13, marginTop: 10 }}>
+              + Add Goal
+            </AppText>
+          </View>
+        </Pressable>
+      )}
+
       {/* ─── Upcoming Bills / Subscriptions ─── */}
       {upcomingBills.length > 0 && (
         <>

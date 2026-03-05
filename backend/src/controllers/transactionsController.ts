@@ -69,10 +69,10 @@ export async function getTransactionByUserId(req: AuthedRequest, res: any) {
 
 export async function createTransaction(req: AuthedRequest, res: any) {
     try {
-        const { title, amount, category, created_at, currency } = req.body;
+        const { title, amount, category, created_at, currency, receipt_url } = req.body;
         const user_id = String(req.user!.id);
 
-        const transaction = await TransactionModel.create(user_id, title, amount, category, created_at, currency);
+        const transaction = await TransactionModel.create(user_id, title, amount, category, created_at, currency, receipt_url || null);
 
         // ✅ Real-time notification to the same user
         emitToUser(user_id, 'tx:new', {
@@ -192,8 +192,8 @@ export async function updateTransaction(req: AuthedRequest, res: any) {
     try {
         const id = String(req.params.id);
         const authed = String(req.user!.id);
-        const { title, amount, category, created_at, currency } = req.body;
-        const tx = await TransactionModel.updateByUser(id, authed, title, amount, category, created_at, currency);
+        const { title, amount, category, created_at, currency, receipt_url } = req.body;
+        const tx = await TransactionModel.updateByUser(id, authed, title, amount, category, created_at, currency, receipt_url !== undefined ? receipt_url : undefined);
         if (!tx) return res.status(404).json({ message: 'Not found' });
 
         emitToUser(authed, 'tx:updated', {

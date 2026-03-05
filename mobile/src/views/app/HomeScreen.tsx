@@ -16,6 +16,7 @@ import Icon from '../../components/Icon';
 import { getCategoryMeta } from '../../constants/categories';
 import { BudgetService, BudgetStatus } from '../../services/BudgetService';
 import { ExchangeRateService } from '../../services/ExchangeRateService';
+import { RecurringService, RecurringRule } from '../../services/RecurringService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -127,6 +128,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const [allBudgets, setAllBudgets] = useState<BudgetStatus[]>([]);
   const [rates, setRates] = useState<Record<string, number>>({});
+  const [upcomingBills, setUpcomingBills] = useState<RecurringRule[]>([]);
 
   // Fetch exchange rates for conversion
   useEffect(() => {
@@ -159,9 +161,9 @@ export default function HomeScreen({ navigation }: any) {
     filteredItems.forEach(t => {
       const converted = convertAmount(t.amount, t.currency || 'LKR');
       if (converted > 0) income += converted;
-      else expense += converted;
+      else expense += Math.abs(converted);
     });
-    const balance = income + expense;
+    const balance = income - expense;
     return {
       income: Math.round(income * 100) / 100,
       expense: Math.round(expense * 100) / 100,
@@ -192,6 +194,22 @@ export default function HomeScreen({ navigation }: any) {
       .slice(0, 5);
   }, [filteredItems]);
 
+  const topCategory = useMemo(() => {
+    const expenses = filteredItems.filter(t => t.amount < 0);
+    const categoryTotals: Record<string, number> = {};
+    expenses.forEach(t => {
+      const cat = t.category || 'Other';
+      const converted = convertAmount(Math.abs(t.amount), t.currency || preferredCurrency);
+      categoryTotals[cat] = (categoryTotals[cat] || 0) + converted;
+    });
+
+    const sorted = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+    if (sorted.length > 0) {
+      return { category: sorted[0][0], amount: sorted[0][1] };
+    }
+    return null;
+  }, [filteredItems, preferredCurrency, convertAmount]);
+
   // Load budget statuses
   useEffect(() => {
     (async () => {
@@ -203,6 +221,29 @@ export default function HomeScreen({ navigation }: any) {
       }
     })();
   }, [filteredItems, year, month, day]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const rules = await RecurringService.list();
+        const activeBills = rules
+          .filter(r => r.is_active && r.amount < 0)
+          .sort((a, b) => new Date(a.next_run).getTime() - new Date(b.next_run).getTime())
+          .slice(0, 3);
+        setUpcomingBills(activeBills);
+      } catch {
+        // silently fail
+      }
+    })();
+  }, [items]); // Re-fetch when items change to stay relatively fresh
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return { text: 'Good Morning', emoji: '☀️' };
+    if (hour < 18) return { text: 'Good Afternoon', emoji: '🌤️' };
+    return { text: 'Good Evening', emoji: '🌙' };
+  };
+  const { text: greetingText, emoji: greetingEmoji } = getGreeting();
 
   return (
     <ScrollView style={[styles.wrap, { backgroundColor: colors.bg }]} showsVerticalScrollIndicator={false}>
@@ -219,8 +260,8 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         )}
         <View style={styles.profileInfo}>
-          <AppText style={[styles.greeting, { color: colors.text }]}>Hi, {name || 'User'}!</AppText>
-          <AppText style={[styles.email, { color: colors.muted }]}>{userEmail}</AppText>
+          <AppText style={[styles.greeting, { color: colors.text }]}>{greetingText} {greetingEmoji}</AppText>
+          <AppText style={[styles.email, { color: colors.muted }]}>{name || userEmail}</AppText>
         </View>
       </View>
 
@@ -228,7 +269,12 @@ export default function HomeScreen({ navigation }: any) {
       <View style={[styles.balanceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.balanceTop}>
           <View>
-            <AppText muted style={{ fontSize: 13, fontWeight: '500' }}>Total Balance</AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <AppText muted style={{ fontSize: 13, fontWeight: '500' }}>Total Balance</AppText>
+              <View style={[styles.filterBadge, { backgroundColor: colors.bg }]}>
+                <AppText style={{ fontSize: 10, color: colors.text, fontWeight: '600' }}>{filterLabel}</AppText>
+              </View>
+            </View>
             <AppText style={[styles.balanceAmount, { color: colors.text }]}>
               {formatMoney(stats.balance, preferredCurrency)}
             </AppText>
@@ -259,6 +305,17 @@ export default function HomeScreen({ navigation }: any) {
             </AppText>
           </View>
         </View>
+        
+        {/* Top Spending Category Indicator */}
+        {topCategory && (
+            <View style={[styles.topCategoryRow, { borderTopColor: colors.border }]}>
+                <AppText muted style={{ fontSize: 12 }}>Top Spending Category: </AppText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={[styles.miniCatDot, { backgroundColor: getCategoryColor(topCategory.category) }]} />
+                  <AppText style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{topCategory.category}</AppText>
+                </View>
+            </View>
+        )}
       </View>
 
       {/* ─── Budget Overview (horizontal scroll with rings) ─── */}
@@ -351,6 +408,57 @@ export default function HomeScreen({ navigation }: any) {
         </View>
       </Pressable>
 
+      {/* ─── Savings Goals ─── */}
+      <Pressable onPress={() => navigation.getParent()?.navigate('Goals')}>
+        <View style={[styles.recurringCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Icon name="target" size={28} color={colors.success} />
+          <AppText style={{ fontWeight: '700', fontSize: 15 }}>Savings Goals</AppText>
+          <AppText muted style={{ fontSize: 12, marginTop: 4, textAlign: 'center', lineHeight: 18 }}>
+            Set savings targets and track your progress with visual rings
+          </AppText>
+          <AppText style={{ color: colors.success, fontWeight: '700', fontSize: 14, marginTop: 10 }}>
+            + Add Goal
+          </AppText>
+          <AppText muted style={{ fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>
+            e.g., Vacation, Emergency Fund, New Car
+          </AppText>
+        </View>
+      </Pressable>
+      
+      {/* ─── Upcoming Bills / Subscriptions ─── */}
+      {upcomingBills.length > 0 && (
+        <>
+            <View style={styles.sectionRow}>
+            <AppText style={styles.sectionTitle}>Upcoming Bills</AppText>
+            <Pressable onPress={() => navigation.getParent()?.navigate('Recurring')} hitSlop={10}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>Manage</AppText>
+                <Icon name="chevron-right" size={14} color={colors.accent} />
+                </View>
+            </Pressable>
+            </View>
+            <View style={[styles.billsContainer, { backgroundColor: colors.surface }]}>
+               {upcomingBills.map(bill => {
+                   const due = new Date(bill.next_run).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                   return (
+                     <View key={bill.id} style={[styles.billRow, { borderBottomColor: colors.border }]}>
+                        <View style={[styles.billIcon, { backgroundColor: getCategoryColor(bill.category) + '20' }]}>
+                            <Icon name={getCategoryMeta(bill.category).icon} size={16} color={getCategoryColor(bill.category)} />
+                        </View>
+                        <View style={{ flex: 1, paddingLeft: 12 }}>
+                            <AppText style={{ fontWeight: '600', fontSize: 14, color: colors.text }}>{bill.title}</AppText>
+                            <AppText muted style={{ fontSize: 12, marginTop: 2 }}>Due {due}</AppText>
+                        </View>
+                        <AppText mono style={{ fontWeight: '700', fontSize: 14, color: colors.danger }}>
+                            {formatMoney(Math.abs(bill.amount), bill.currency || preferredCurrency)}
+                        </AppText>
+                     </View>
+                   )
+               })}
+            </View>
+        </>
+      )}
+
       {/* ─── Recent Transactions ─── */}
       <View style={styles.sectionRow}>
         <AppText style={styles.sectionTitle}>Recent Transactions</AppText>
@@ -425,8 +533,21 @@ export default function HomeScreen({ navigation }: any) {
           );
         })
       ) : (
-        <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-          <AppText muted>No transactions yet. Tap + to add one.</AppText>
+        <View style={[styles.emptyStateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.emptyIconWrap, { backgroundColor: colors.accent + '20' }]}>
+            <Icon name="file-text" size={32} color={colors.accent} />
+          </View>
+          <AppText style={{ fontWeight: '700', fontSize: 16, marginTop: 12 }}>No transactions yet</AppText>
+          <AppText muted style={{ fontSize: 13, marginTop: 4, textAlign: 'center', lineHeight: 20 }}>
+             Start tracking your expenses and income to see your balance here.
+          </AppText>
+          <Pressable
+            onPress={() => navigation.getParent()?.navigate('AddTx')}
+            style={[styles.emptyButton, { backgroundColor: colors.accent }]}
+          >
+            <Icon name="plus" size={16} color="#FFF" />
+            <AppText style={{ color: '#FFF', fontWeight: '600', fontSize: 14 }}>Add Transaction</AppText>
+          </Pressable>
         </View>
       )}
 
@@ -503,6 +624,26 @@ const styles = StyleSheet.create({
   sparklineWrap: {
     marginTop: 8,
     opacity: 0.9,
+  },
+  filterBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+
+  // ── Top Category Indicator ──
+  topCategoryRow: {
+    marginTop: 18,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  miniCatDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
 
   // ── Income / Expense Pills ──
@@ -590,6 +731,25 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     marginTop: 18,
   },
+  
+  // ── Upcoming Bills ──
+  billsContainer: {
+    borderRadius: radius.lg,
+    paddingHorizontal: 16,
+  },
+  billRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  billIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   // ── Transaction Rows ──
   txRow: {
@@ -611,5 +771,32 @@ const styles = StyleSheet.create({
   },
   txInfo: {
     flex: 1,
+  },
+  
+  // ── Empty State ──
+  emptyStateCard: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    borderRadius: radius.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginTop: 10,
+  },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: radius.full,
+    marginTop: 24,
+    gap: 8,
   },
 });

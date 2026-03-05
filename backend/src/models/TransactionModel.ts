@@ -8,6 +8,7 @@ export interface Transaction {
   currency: string;
   category: string;
   created_at: Date;
+  receipt_url?: string | null;
 }
 
 export class TransactionModel {
@@ -26,18 +27,20 @@ export class TransactionModel {
     amount: number,
     category: string,
     createdAt?: string,
-    currency?: string
+    currency?: string,
+    receiptUrl?: string | null
   ): Promise<Transaction> {
     const cur = currency || 'LKR';
+    const receipt = receiptUrl || null;
     const result = createdAt
       ? await sql`
-          INSERT INTO transactions (user_id, title, amount, category, currency, created_at)
-          VALUES (${userId}, ${title}, ${amount}, ${category}, ${cur}, ${createdAt})
+          INSERT INTO transactions (user_id, title, amount, category, currency, created_at, receipt_url)
+          VALUES (${userId}, ${title}, ${amount}, ${category}, ${cur}, ${createdAt}, ${receipt})
           RETURNING *
         `
       : await sql`
-          INSERT INTO transactions (user_id, title, amount, category, currency)
-          VALUES (${userId}, ${title}, ${amount}, ${category}, ${cur})
+          INSERT INTO transactions (user_id, title, amount, category, currency, receipt_url)
+          VALUES (${userId}, ${title}, ${amount}, ${category}, ${cur}, ${receipt})
           RETURNING *
         `;
     return result[0] as Transaction;
@@ -59,19 +62,21 @@ export class TransactionModel {
     amount: number,
     category: string,
     createdAt?: string,
-    currency?: string
+    currency?: string,
+    receiptUrl?: string | null
   ): Promise<Transaction | null> {
     const cur = currency || 'LKR';
+    const receipt = receiptUrl !== undefined ? receiptUrl : null;
     const rows = createdAt
       ? await sql`
           UPDATE transactions
-          SET title = ${title}, amount = ${amount}, category = ${category}, currency = ${cur}, created_at = ${createdAt}
+          SET title = ${title}, amount = ${amount}, category = ${category}, currency = ${cur}, created_at = ${createdAt}, receipt_url = ${receipt}
           WHERE id = ${id} AND user_id = ${userId}
           RETURNING *
         `
       : await sql`
           UPDATE transactions
-          SET title = ${title}, amount = ${amount}, category = ${category}, currency = ${cur}
+          SET title = ${title}, amount = ${amount}, category = ${category}, currency = ${cur}, receipt_url = ${receipt}
           WHERE id = ${id} AND user_id = ${userId}
           RETURNING *
         `;

@@ -11,6 +11,7 @@ export class TransactionService {
       amount: Number(tx.amount),
       currency: tx.currency || 'LKR',
       dateISO: tx.created_at,
+      receiptUrl: tx.receipt_url || null,
     }));
   }
 
@@ -21,10 +22,11 @@ export class TransactionService {
     _userId: string,
     dateISO?: string,
     currency?: string,
+    receiptUrl?: string | null,
   ): Promise<void> {
     await apiFetch(`/api/transaction`, {
       method: 'POST',
-      body: JSON.stringify({ title, amount, category, dateISO, currency: currency || 'LKR' }),
+      body: JSON.stringify({ title, amount, category, dateISO, currency: currency || 'LKR', receipt_url: receiptUrl || null }),
     });
   }
 
@@ -35,10 +37,11 @@ export class TransactionService {
     category: string,
     dateISO?: string,
     currency?: string,
+    receiptUrl?: string | null,
   ): Promise<void> {
     await apiFetch(`/api/transaction/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ title, amount, category, dateISO, currency: currency || 'LKR' }),
+      body: JSON.stringify({ title, amount, category, dateISO, currency: currency || 'LKR', receipt_url: receiptUrl }),
     });
   }
 

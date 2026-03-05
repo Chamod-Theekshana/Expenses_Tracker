@@ -15,6 +15,7 @@ import notificationRoutes from './routes/notificationRoutes';
 import categoriesRoutes from './routes/categoriesRoutes';
 import budgetsRoutes from './routes/budgetsRoutes';
 import recurringRoutes from './routes/recurringRoutes';
+import goalsRoutes from './routes/goalsRoutes';
 import exchangeRateRoutes from './routes/exchangeRateRoutes';
 
 import { initSocket } from './socket';
@@ -42,6 +43,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/budgets', budgetsRoutes);
 app.use('/api/recurring', recurringRoutes);
+app.use('/api/goals', goalsRoutes);
 app.use('/api/exchange-rates', exchangeRateRoutes);
 
 app.use(errorHandler);

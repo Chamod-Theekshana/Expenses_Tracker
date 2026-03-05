@@ -131,6 +131,7 @@ export default function Sidebar() {
           </View>
 
           <AppText muted style={styles.sectionHeader}>FINANCIAL PLANNING</AppText>
+          <NavItem title="Savings Goals" icon="target" screen="Goals" />
           <NavItem title="Manage Budgets" icon="chart" screen="Budgets" />
           <NavItem title="Recurring Transactions" icon="refresh-cw" screen="Recurring" />
         </View>

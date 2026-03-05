@@ -77,6 +77,24 @@ export async function initDB() {
         )`;
 
         await sql`ALTER TABLE recurring_transactions ADD COLUMN IF NOT EXISTS currency VARCHAR(10) NOT NULL DEFAULT 'LKR'`;
+
+        // ── Savings Goals ────────────────────────────────────────────────
+        await sql`CREATE TABLE IF NOT EXISTS goals(
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            target_amount DECIMAL(10,2) NOT NULL,
+            current_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+            currency VARCHAR(10) NOT NULL DEFAULT 'LKR',
+            deadline DATE,
+            is_completed BOOLEAN NOT NULL DEFAULT false,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`;
+        await sql`ALTER TABLE goals ADD COLUMN IF NOT EXISTS is_completed BOOLEAN NOT NULL DEFAULT false`;
+
+        // ── Transaction Receipts ─────────────────────────────────────────
+        await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS receipt_url TEXT`;
+
         console.log('Database initialized successfully')
     } catch (error) {
         console.error('Error initializing database', error)

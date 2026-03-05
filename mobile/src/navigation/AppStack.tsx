@@ -12,6 +12,8 @@ import RecurringScreen from '../views/app/RecurringScreen';
 import Sidebar from '../components/Sidebar';
 import { ThemeContext } from '../store/theme';
 
+import GoalsScreen from '../views/app/GoalsScreen';
+
 export type AppStackParamList = {
   Tabs: undefined;
   AddTx: undefined;
@@ -19,6 +21,7 @@ export type AppStackParamList = {
   Categories: undefined;
   Budgets: undefined;
   Recurring: undefined;
+  Goals: undefined;
 };
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
@@ -78,6 +81,14 @@ export default function AppStack() {
       <Stack.Screen
         name="Recurring"
         component={RecurringScreen}
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+        }}
+      />
+      <Stack.Screen
+        name="Goals"
+        component={GoalsScreen}
         options={{
           presentation: 'modal',
           animation: 'slide_from_bottom',

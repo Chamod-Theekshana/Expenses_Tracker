@@ -37,6 +37,12 @@ import {
   Check,
   Info,
   Menu,
+  Target,
+  Camera,
+  Image,
+  Paperclip,
+  PartyPopper,
+  FileText,
   type LucideProps,
 } from 'lucide-react-native';
 
@@ -77,6 +83,11 @@ const iconMap = {
   check: Check,
   info: Info,
   menu: Menu,
+  target: Target,
+  camera: Camera,
+  image: Image,
+  'party-popper': PartyPopper,
+  'file-text': FileText,
 } as const;
 
 export type IconName = keyof typeof iconMap;

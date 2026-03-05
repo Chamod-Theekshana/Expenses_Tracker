@@ -7,4 +7,5 @@ export interface Transaction {
   amount: number;
   currency: string;
   dateISO: string;
+  receiptUrl?: string | null;
 }

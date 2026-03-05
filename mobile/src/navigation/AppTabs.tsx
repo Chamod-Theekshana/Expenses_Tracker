@@ -35,7 +35,7 @@ function Label({ title, focused, accentColor, mutedColor }: { title: string; foc
   }, [focused]);
 
   return (
-    <Animated.View style={{ transform: [{ scale }] }}>
+    <Animated.View style={{ transform: [{ scale }], minWidth: 70, alignItems: 'center' }}>
       <AppText numberOfLines={1} style={{ fontSize: 10, marginTop: 4, color: focused ? accentColor : mutedColor, fontWeight: '600', textAlign: 'center' }}>
         {title}
       </AppText>
@@ -45,7 +45,7 @@ function Label({ title, focused, accentColor, mutedColor }: { title: string; foc
 
 function TabIcon({ icon, title, focused, colors }: { icon: IconName; title: string; focused: boolean; colors: any }) {
   return (
-    <View style={{ alignItems: 'center' }}>
+    <View style={{ alignItems: 'center', minWidth: 70 }}>
       <Icon name={icon} size={24} color={focused ? colors.accent : colors.muted} />
       <Label title={title} focused={focused} accentColor={colors.accent} mutedColor={colors.muted} />
     </View>

@@ -245,7 +245,10 @@ export default function RecurringScreen({ navigation }: any) {
           </Card>
         )}
         renderItem={({ item }) => {
-          const nextDate = new Date().toLocaleDateString();
+          const nextDateObj = new Date(item.next_run);
+          const nextDate = Number.isNaN(nextDateObj.getTime())
+            ? String(item.next_run)
+            : nextDateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
           const isExpense = item.amount < 0;
 
           return (

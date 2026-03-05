@@ -8,7 +8,9 @@ import { TransactionsProvider } from './src/store/transactions';
 import { DateFilterProvider } from './src/store/dateFilter';
 import { ThemeProvider, ThemeContext } from './src/store/theme';
 import { ProfileProvider } from './src/store/profile';
+import { SidebarProvider } from './src/store/sidebar';
 import { requestPushPermission, ensureNotifChannel, showLocalNotification } from './src/services/PushNotificationService';
+import { ToastProvider } from './src/components/Toast';
 
 function ThemedStatusBar() {
   const { theme, colors } = useContext(ThemeContext);
@@ -51,15 +53,19 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <ThemedStatusBar />
-        <AuthProvider>
-          <ProfileProvider>
-            <TransactionsProvider>
-              <DateFilterProvider>
-                <RootNavigator />
-              </DateFilterProvider>
-            </TransactionsProvider>
-          </ProfileProvider>
-        </AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <ProfileProvider>
+              <SidebarProvider>
+                <TransactionsProvider>
+                  <DateFilterProvider>
+                    <RootNavigator />
+                  </DateFilterProvider>
+                </TransactionsProvider>
+              </SidebarProvider>
+            </ProfileProvider>
+          </AuthProvider>
+        </ToastProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

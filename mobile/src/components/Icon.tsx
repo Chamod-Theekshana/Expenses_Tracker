@@ -36,6 +36,7 @@ import {
   Edit3,
   Check,
   Info,
+  Menu,
   type LucideProps,
 } from 'lucide-react-native';
 
@@ -75,6 +76,7 @@ const iconMap = {
   edit: Edit3,
   check: Check,
   info: Info,
+  menu: Menu,
 } as const;
 
 export type IconName = keyof typeof iconMap;

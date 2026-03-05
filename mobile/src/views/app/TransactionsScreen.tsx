@@ -8,6 +8,8 @@ import { DateFilterContext } from '../../store/dateFilter';
 import { AuthContext } from '../../store/auth';
 import TransactionItem from '../../components/TransactionItem';
 import Icon from '../../components/Icon';
+import Chip from '../../components/Chip';
+import IconButton from '../../components/IconButton';
 import { ThemeContext } from '../../store/theme';
 import { scaleHeight } from '../../constants/size';
 
@@ -118,9 +120,13 @@ export default function TransactionsScreen() {
           autoCorrect={false}
         />
         {search.length > 0 && (
-          <Pressable onPress={() => setSearch('')} hitSlop={10}>
-            <Icon name="x" size={18} color={colors.muted} />
-          </Pressable>
+          <IconButton
+            icon="x"
+            onPress={() => setSearch('')}
+            size={34}
+            iconSize={18}
+            accessibilityLabel="Clear search"
+          />
         )}
       </View>
 
@@ -131,40 +137,24 @@ export default function TransactionsScreen() {
           const chipColor =
             type === 'Expense' ? colors.danger : type === 'Income' ? colors.success : colors.accent;
           return (
-            <Pressable
+            <Chip
               key={type}
+              label={type}
+              selected={active}
               onPress={() => setTypeFilter(active ? 'All' : type)}
-              style={[
-                styles.typeChip,
-                { backgroundColor: colors.surface2, borderColor: colors.border },
-                active && { backgroundColor: chipColor, borderColor: chipColor },
-              ]}
-            >
-              <AppText
-                style={{
-                  fontWeight: '600',
-                  fontSize: 13,
-                  color: active ? '#FFF' : colors.text,
-                }}
-              >
-                {type}
-              </AppText>
-            </Pressable>
+              accentColor={chipColor}
+              size="sm"
+            />
           );
         })}
 
-        {/* Sort Toggle */}
-        <Pressable
+        <Chip
+          label={sortNewest ? 'Newest' : 'Oldest'}
+          iconLeft="arrow-down-up"
           onPress={() => setSortNewest(!sortNewest)}
-          style={[styles.sortBtn, { backgroundColor: colors.surface2, borderColor: colors.border }]}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Icon name="arrow-down-up" size={14} color={colors.text} />
-            <AppText style={{ fontWeight: '600', fontSize: 12, color: colors.text }}>
-              {sortNewest ? 'Newest' : 'Oldest'}
-            </AppText>
-          </View>
-        </Pressable>
+          size="sm"
+          style={{ marginLeft: 'auto' }}
+        />
       </View>
 
       {/* Category Chips */}
@@ -174,25 +164,14 @@ export default function TransactionsScreen() {
             {categories.map((cat) => {
               const active = selectedCategory === cat;
               return (
-                <Pressable
-                  key={cat}
-                  onPress={() => setSelectedCategory(active ? '' : cat)}
-                  style={[
-                    styles.catChip,
-                    { backgroundColor: colors.surface2, borderColor: colors.border },
-                    active && { backgroundColor: colors.accent, borderColor: colors.accent },
-                  ]}
-                >
-                  <AppText
-                    style={{
-                      fontWeight: '600',
-                      fontSize: 12,
-                      color: active ? '#FFF' : colors.text,
-                    }}
-                  >
-                    {cat}
-                  </AppText>
-                </Pressable>
+                <View key={cat} style={{ marginRight: 8 }}>
+                  <Chip
+                    label={cat}
+                    selected={active}
+                    onPress={() => setSelectedCategory(active ? '' : cat)}
+                    size="sm"
+                  />
+                </View>
               );
             })}
           </ScrollView>
@@ -298,29 +277,9 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 10,
   },
-  typeChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: radius.md,
-    borderWidth: 1,
-  },
-  sortBtn: {
-    marginLeft: 'auto',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: radius.md,
-    borderWidth: 1,
-  },
   catWrap: {
     flexDirection: 'row',
     marginBottom: 10,
-  },
-  catChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    marginRight: 8,
   },
   clearBtn: {
     alignSelf: 'flex-start',

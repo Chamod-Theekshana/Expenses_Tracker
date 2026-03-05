@@ -1,12 +1,15 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { View, StyleSheet, Alert, Pressable, ScrollView } from 'react-native';
+import { View, StyleSheet, Alert, Pressable } from 'react-native';
 import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
 import AppButton from '../../components/AppButton';
 import Card from '../../components/Card';
 import Icon from '../../components/Icon';
+import Chip from '../../components/Chip';
+import Screen from '../../components/Screen';
+import IconButton from '../../components/IconButton';
 import { getCategoryMeta } from '../../constants/categories';
-import { spacing, radius } from '../../theme/colors';
+import { radius } from '../../theme/colors';
 import { TransactionsContext, Tx } from '../../store/transactions';
 import { AuthContext } from '../../store/auth';
 import { scaleHeight } from '../../constants/size';
@@ -94,15 +97,15 @@ export default function AddTransactionScreen({ navigation }: any) {
   const yesterdayStr = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
   const isYesterday = dateISO === yesterdayStr;
 
-  const Wrapper = isIncome ? View : ScrollView;
-
   return (
-    <Wrapper style={[styles.wrap, { backgroundColor: colors.bg }]} showsVerticalScrollIndicator={false} contentContainerStyle={!isIncome ? { paddingBottom: scaleHeight(50) } : undefined}>
+    <Screen
+      preset={isIncome ? 'fixed' : 'scroll'}
+      padded
+      contentContainerStyle={!isIncome ? { paddingBottom: scaleHeight(50) } : undefined}
+    >
       <View style={styles.topRow}>
         <AppText title>Add</AppText>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
-          <Icon name="x" size={24} color={colors.muted} />
-        </Pressable>
+        <IconButton icon="x" onPress={() => navigation.goBack()} accessibilityLabel="Close" />
       </View>
 
       <Card style={{ marginTop: 14 }}>
@@ -130,26 +133,8 @@ export default function AddTransactionScreen({ navigation }: any) {
         </AppText>
         {/* Date quick presets */}
         <View style={styles.dateRow}>
-          <Pressable
-            onPress={setToday}
-            style={[
-              styles.datePreset,
-              { backgroundColor: colors.surface2, borderColor: colors.border },
-              isToday && { backgroundColor: colors.accent, borderColor: colors.accent },
-            ]}
-          >
-            <AppText style={{ fontWeight: '600', fontSize: 13, color: isToday ? '#FFF' : colors.text }}>Today</AppText>
-          </Pressable>
-          <Pressable
-            onPress={setYesterday}
-            style={[
-              styles.datePreset,
-              { backgroundColor: colors.surface2, borderColor: colors.border },
-              isYesterday && { backgroundColor: colors.accent, borderColor: colors.accent },
-            ]}
-          >
-            <AppText style={{ fontWeight: '600', fontSize: 13, color: isYesterday ? '#FFF' : colors.text }}>Yesterday</AppText>
-          </Pressable>
+          <Chip label="Today" selected={isToday} onPress={setToday} size="sm" />
+          <Chip label="Yesterday" selected={isYesterday} onPress={setYesterday} size="sm" />
           <View style={{ flex: 1 }}>
             <AppInput
               value={dateISO}
@@ -167,19 +152,15 @@ export default function AddTransactionScreen({ navigation }: any) {
         </AppText>
         <View style={styles.chipsRow}>
           {CURRENCY_OPTIONS.map((cur) => (
-            <Pressable
-              key={cur}
-              onPress={() => setCurrency(cur)}
-              style={[
-                styles.currencyChip,
-                { backgroundColor: colors.surface2, borderColor: colors.border },
-                currency === cur && { backgroundColor: colors.accent, borderColor: colors.accent },
-              ]}
-            >
-              <AppText style={{ fontWeight: '700', fontSize: 13, color: currency === cur ? '#FFF' : colors.text }}>
-                {cur}
-              </AppText>
-            </Pressable>
+            <View key={cur} style={{ flex: 1 }}>
+              <Chip
+                label={cur}
+                selected={currency === cur}
+                onPress={() => setCurrency(cur)}
+                size="sm"
+                style={{ justifyContent: 'center' }}
+              />
+            </View>
           ))}
         </View>
 
@@ -225,18 +206,16 @@ export default function AddTransactionScreen({ navigation }: any) {
                 const meta = getCategoryMeta(c);
                 const isActive = category === c;
                 return (
-                  <Pressable
+                  <Chip
                     key={c}
+                    label={c}
+                    selected={isActive}
                     onPress={() => setCategory(c)}
-                    style={[
-                      styles.cat,
-                      { backgroundColor: colors.surface2, borderColor: colors.border },
-                      isActive && { backgroundColor: meta.color, borderColor: meta.color },
-                    ]}
-                  >
-                    <Icon name={meta.icon} size={16} color={isActive ? '#FFF' : meta.color} />
-                    <AppText style={{ fontWeight: '600', fontSize: 13, color: isActive ? '#FFF' : colors.text, marginLeft: 6 }}>{c}</AppText>
-                  </Pressable>
+                    iconLeft={meta.icon}
+                    accentColor={meta.color}
+                    size="sm"
+                    style={{ marginRight: 8, marginBottom: 8 }}
+                  />
                 );
               })}
             </View>
@@ -250,21 +229,16 @@ export default function AddTransactionScreen({ navigation }: any) {
 
         <AppButton title="Save Transaction" onPress={save} disabled={!canSave} loading={saving} style={{ marginTop: 20 }} />
       </Card>
-    </Wrapper>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    flex: 1,
-    padding: spacing.lg,
-    marginTop: scaleHeight(30),
-  },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: scaleHeight(30),
+    marginBottom: 10,
   },
   chipsRow: {
     flexDirection: 'row',
@@ -291,23 +265,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
   },
-  currencyChip: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   dateRow: {
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
-  },
-  datePreset: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: radius.md,
-    borderWidth: 1,
   },
 });

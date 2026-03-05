@@ -4,11 +4,11 @@ import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
 import AppButton from '../../components/AppButton';
 import Card from '../../components/Card';
+import Screen from '../../components/Screen';
+import IconButton from '../../components/IconButton';
 import { ThemeContext } from '../../store/theme';
-import { spacing, radius } from '../../theme/colors';
+import { radius } from '../../theme/colors';
 import { Category, CategoryService } from '../../services/CategoryService';
-import { scaleHeight } from '../../constants/size';
-import Icon from '../../components/Icon';
 
 export default function CategoriesScreen({ navigation }: any) {
   const { colors } = useContext(ThemeContext);
@@ -70,12 +70,10 @@ export default function CategoriesScreen({ navigation }: any) {
   };
 
   return (
-    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
+    <Screen preset="fixed" padded>
       <View style={styles.topRow}>
         <AppText title>Categories</AppText>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
-          <Icon name="x" size={24} color={colors.muted} />
-        </Pressable>
+        <IconButton icon="x" onPress={() => navigation.goBack()} accessibilityLabel="Close" />
       </View>
 
       <Card>
@@ -110,21 +108,16 @@ export default function CategoriesScreen({ navigation }: any) {
         contentContainerStyle={{ paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
       />
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    flex: 1,
-    padding: spacing.lg,
-    marginTop: scaleHeight(50),
-  },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: scaleHeight(20),
+    marginBottom: 10,
   },
   row: {
     paddingHorizontal: 16,

@@ -8,6 +8,7 @@ import { TransactionsContext } from '../../store/transactions';
 import { AuthContext } from '../../store/auth';
 import { ProfileContext } from '../../store/profile';
 import { DateFilterContext } from '../../store/dateFilter';
+import { SidebarContext } from '../../store/sidebar';
 import { formatMoney } from '../../utils/money';
 import { scaleHeight } from '../../constants/size';
 import { ThemeContext } from '../../store/theme';
@@ -122,6 +123,7 @@ export default function HomeScreen({ navigation }: any) {
   const { name, profilePhoto, currency: preferredCurrency } = useContext(ProfileContext);
   const { colors } = useContext(ThemeContext);
   const { matchesFilter, year, month, day, filterLabel, hasActiveFilter } = useContext(DateFilterContext);
+  const { openSidebar } = useContext(SidebarContext);
 
   const [allBudgets, setAllBudgets] = useState<BudgetStatus[]>([]);
   const [rates, setRates] = useState<Record<string, number>>({});
@@ -183,7 +185,12 @@ export default function HomeScreen({ navigation }: any) {
     return points.length > 8 ? points.slice(-8) : points;
   }, [filteredItems]);
 
-  const recent = filteredItems.slice(0, 5);
+  const recent = useMemo(() => {
+    // Ensure "Recent" is actually the newest by date, regardless of API ordering
+    return [...filteredItems]
+      .sort((a, b) => new Date(b.dateISO).getTime() - new Date(a.dateISO).getTime())
+      .slice(0, 5);
+  }, [filteredItems]);
 
   // Load budget statuses
   useEffect(() => {
@@ -201,6 +208,9 @@ export default function HomeScreen({ navigation }: any) {
     <ScrollView style={[styles.wrap, { backgroundColor: colors.bg }]} showsVerticalScrollIndicator={false}>
       {/* ─── Profile Header ─── */}
       <View style={[styles.profileHeader, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Pressable onPress={openSidebar} style={{ marginRight: 12, padding: 4 }}>
+          <Icon name="menu" size={24} color={colors.text} />
+        </Pressable>
         {profilePhoto ? (
           <Image source={{ uri: profilePhoto }} style={styles.profileImage} />
         ) : (

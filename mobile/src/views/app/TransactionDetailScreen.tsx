@@ -1,15 +1,15 @@
 import React, { useContext, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
 import AppButton from '../../components/AppButton';
 import Card from '../../components/Card';
+import Screen from '../../components/Screen';
+import IconButton from '../../components/IconButton';
 import { ThemeContext } from '../../store/theme';
 import { TransactionsContext, Tx } from '../../store/transactions';
 import { AuthContext } from '../../store/auth';
-import { spacing } from '../../theme/colors';
-import { scaleHeight } from '../../constants/size';
-import Icon from '../../components/Icon';
+
 
 export default function TransactionDetailScreen({ route, navigation }: any) {
   const { tx }: { tx: Tx } = route.params;
@@ -80,12 +80,10 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
   };
 
   return (
-    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
+    <Screen preset="fixed" padded>
       <View style={styles.topRow}>
         <AppText title>Transaction</AppText>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={10}>
-          <Icon name="x" size={24} color={colors.muted} />
-        </Pressable>
+        <IconButton icon="x" onPress={() => navigation.goBack()} accessibilityLabel="Close" />
       </View>
 
       <Card>
@@ -124,20 +122,15 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
           style={{ marginTop: 10, backgroundColor: colors.danger, borderColor: 'transparent' }}
         />
       </Card>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    flex: 1,
-    padding: spacing.lg,
-    marginTop: scaleHeight(50),
-  },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: scaleHeight(20),
+    marginBottom: 10,
   },
 });

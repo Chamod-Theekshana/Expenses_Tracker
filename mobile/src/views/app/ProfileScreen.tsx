@@ -208,28 +208,6 @@ export default function ProfileScreen({ navigation }: any) {
           <AppPicker options={dateFormatOptions} value={dateFormat} onValueChange={handleDateFormatChange} />
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-          <Pressable onPress={() => navigation.getParent()?.navigate('Budgets')}>
-            <View style={[styles.linkBtn, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-              <View>
-                <AppText style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>Manage Budgets</AppText>
-                <AppText muted style={{ fontSize: 12, marginTop: 2 }}>Set monthly spending limits per category</AppText>
-              </View>
-              <Icon name="chevron-right" size={18} color={colors.accent} />
-            </View>
-          </Pressable>
-
-          <View style={{ height: 10 }} />
-
-          <Pressable onPress={() => navigation.getParent()?.navigate('Recurring')}>
-            <View style={[styles.linkBtn, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
-              <View>
-                <AppText style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>Recurring Transactions</AppText>
-                <AppText muted style={{ fontSize: 12, marginTop: 2 }}>Auto-repeat daily, weekly, monthly expenses</AppText>
-              </View>
-              <Icon name="chevron-right" size={18} color={colors.accent} />
-            </View>
-          </Pressable>
         </Card>
 
         <View style={{ height: 16 }} />

@@ -19,11 +19,11 @@ import IconButton from '../../components/IconButton';
 import Icon from '../../components/Icon';
 import Chip from '../../components/Chip';
 import { ThemeContext } from '../../store/theme';
+import { ProfileContext } from '../../store/profile';
 import { GoalService, Goal } from '../../services/GoalService';
+import { NotificationsContext } from '../../store/notifications';
 import { radius, spacing } from '../../theme/colors';
 import { formatMoney } from '../../utils/money';
-
-const CURRENCY_OPTIONS = ['LKR', 'USD', 'EUR', 'GBP'];
 
 // ── Animated circular progress ring ────────────────────────────
 function GoalRing({
@@ -184,12 +184,11 @@ function GoalFormModal({
   visible: boolean;
   initial?: Goal | null;
   onClose: () => void;
-  onSave: (name: string, target: number, currency: string, deadline: string | null) => Promise<void>;
+  onSave: (name: string, target: number, deadline: string | null) => Promise<void>;
 }) {
   const { colors } = useContext(ThemeContext);
   const [name, setName] = useState(initial?.name || '');
   const [targetRaw, setTargetRaw] = useState(initial ? String(initial.target_amount) : '');
-  const [currency, setCurrency] = useState(initial?.currency || 'LKR');
   const [deadline, setDeadline] = useState(initial?.deadline?.slice(0, 10) || '');
   const [saving, setSaving] = useState(false);
 
@@ -197,7 +196,6 @@ function GoalFormModal({
     if (visible) {
       setName(initial?.name || '');
       setTargetRaw(initial ? String(initial.target_amount) : '');
-      setCurrency(initial?.currency || 'LKR');
       setDeadline(initial?.deadline?.slice(0, 10) || '');
     }
   }, [visible, initial]);
@@ -226,7 +224,7 @@ function GoalFormModal({
     if (!canSave) return;
     try {
       setSaving(true);
-      await onSave(name.trim(), Number(targetRaw), currency, deadline || null);
+      await onSave(name.trim(), Number(targetRaw), deadline || null);
       onClose();
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to save');
@@ -253,15 +251,7 @@ function GoalFormModal({
           <AppText muted style={{ fontSize: 13, marginBottom: 8 }}>Target Amount</AppText>
           <AppInput value={targetRaw} onChangeText={setTargetRaw} keyboardType="decimal-pad" placeholder="e.g. 50000" />
 
-          <View style={{ height: 14 }} />
-          <AppText muted style={{ fontSize: 13, marginBottom: 8 }}>Currency</AppText>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            {CURRENCY_OPTIONS.map((c) => (
-              <View key={c} style={{ flex: 1 }}>
-                <Chip label={c} selected={currency === c} onPress={() => setCurrency(c)} size="sm" style={{ justifyContent: 'center' }} />
-              </View>
-            ))}
-          </View>
+          {/* Currency selection removed to enforce global Profile preference */}
 
           <View style={{ height: 14 }} />
           <AppText muted style={{ fontSize: 13, marginBottom: 8 }}>Deadline (optional, YYYY-MM-DD)</AppText>
@@ -344,6 +334,8 @@ function ContributeModal({
 // ── Main Screen ────────────────────────────────────────────────
 export default function GoalsScreen({ navigation }: any) {
   const { colors } = useContext(ThemeContext);
+  const { currency: preferredCurrency } = useContext(ProfileContext);
+  const { show } = useContext(NotificationsContext);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(false);
   const [formVisible, setFormVisible] = useState(false);
@@ -367,13 +359,19 @@ export default function GoalsScreen({ navigation }: any) {
     load();
   }, [load]);
 
-  const handleSave = async (name: string, target: number, currency: string, deadline: string | null) => {
+  const handleSave = async (name: string, target: number, deadline: string | null) => {
     if (editTarget) {
-      const updated = await GoalService.update(editTarget.id, name, target, currency, deadline);
+      const updated = await GoalService.update(editTarget.id, name, target, preferredCurrency || 'LKR', deadline);
       setGoals((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
     } else {
-      const created = await GoalService.create(name, target, currency, deadline);
+      const created = await GoalService.create(name, target, preferredCurrency || 'LKR', deadline);
       setGoals((prev) => [created, ...prev]);
+      
+      // Show local in-app banner on goal creation (similar to transactions)
+      show({
+        title: 'Goal Created!',
+        body: `Your savings goal "${created.name}" has been set up successfully.`,
+      });
     }
   };
 
@@ -407,7 +405,7 @@ export default function GoalsScreen({ navigation }: any) {
     <Screen preset="scroll" padded>
       <View style={styles.header}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Icon name="target" size={24} color={colors.accent} />
+          <Icon name="check-circle" size={24} color={colors.accent} />
           <AppText title>Savings Goals</AppText>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -452,7 +450,7 @@ export default function GoalsScreen({ navigation }: any) {
 
       {!loading && goals.length === 0 && (
         <View style={{ alignItems: 'center', marginTop: 60 }}>
-          <Icon name="target" size={48} color={colors.muted} />
+          <Icon name="check-circle" size={48} color={colors.muted} />
           <AppText style={{ color: colors.muted, marginTop: 14, fontSize: 16 }}>No savings goals yet</AppText>
           <AppText muted style={{ fontSize: 13, marginTop: 6, textAlign: 'center' }}>
             Tap + to set a savings target and track your progress

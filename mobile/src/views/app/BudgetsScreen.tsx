@@ -11,6 +11,7 @@ import { CategoryService, Category } from '../../services/CategoryService';
 import { DateFilterContext } from '../../store/dateFilter';
 import { formatMoney } from '../../utils/money';
 import Icon from '../../components/Icon';
+import Chip from '../../components/Chip';
 import { scaleHeight } from '../../constants/size';
 import { ProfileContext } from '../../store/profile';
 
@@ -92,7 +93,7 @@ export default function BudgetsScreen({ navigation }: any) {
     if (!canAdd) return;
     try {
       setLoading(true);
-      await BudgetService.create(selectedCat, amount);
+      await BudgetService.create(selectedCat, amount, preferredCurrency || 'LKR');
       setSelectedCat('');
       setAmountRaw('');
       await load();
@@ -247,10 +248,10 @@ export default function BudgetsScreen({ navigation }: any) {
 
                 <View style={styles.budgetFooter}>
                   <AppText muted style={{ fontSize: 12 }}>
-                    Spent: {formatMoney(item.spent, preferredCurrency)}
+                    Spent: {formatMoney(item.spent, item.currency)}
                   </AppText>
                   <AppText muted style={{ fontSize: 12 }}>
-                    Limit: {formatMoney(item.amount, preferredCurrency)}
+                    Limit: {formatMoney(item.amount, item.currency)}
                   </AppText>
                 </View>
 

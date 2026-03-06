@@ -1,0 +1,2 @@
+src/views/app/GoalsScreen.tsx(455,31): error TS2322: Type '48' is not assignable to type 'IconSize | undefined'.
+src/views/app/TransactionDetailScreen.tsx(144,19): error TS2322: Type '"paperclip"' is not assignable to type '"search" | "repeat" | "filter" | "menu" | "image" | "home" | "activity" | "chart" | "profile" | "plus" | "x" | "calendar" | "trending-up" | "trending-down" | "alert-triangle" | ... 25 more ... | "file-text"'.

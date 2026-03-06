@@ -19,7 +19,7 @@ export async function getBudgetStatus(req: AuthedRequest, res: Response) {
 
 export async function createBudget(req: AuthedRequest, res: Response) {
   const userId = String(req.user!.id);
-  const { category, amount, period } = req.body || {};
+  const { category, amount, currency, period } = req.body || {};
 
   if (!category || typeof category !== 'string' || category.trim().length < 1) {
     return res.status(400).json({ message: 'Category is required' });
@@ -37,7 +37,8 @@ export async function createBudget(req: AuthedRequest, res: Response) {
   }
 
   try {
-    const row = await BudgetModel.create(userId, category.trim(), numAmount, p);
+    const c = (currency || 'LKR') as string;
+    const row = await BudgetModel.create(userId, category.trim(), numAmount, c, p);
     return res.status(201).json({ budget: row });
   } catch (e: any) {
     if (String(e?.message || '').includes('duplicate') || String(e?.message || '').includes('unique')) {

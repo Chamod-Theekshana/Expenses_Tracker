@@ -213,12 +213,42 @@ export default function HomeScreen({ navigation }: any) {
     return null;
   }, [filteredItems, preferredCurrency, convertAmount]);
 
+  const isActiveInFilter = useCallback((createdAt: string, deadline?: string | null) => {
+    if (!year) return true; // All time
+
+    const created = new Date(createdAt);
+    let filterStart: Date;
+    let filterEnd: Date;
+
+    if (day && month) {
+      filterStart = new Date(year, month - 1, day, 0, 0, 0);
+      filterEnd = new Date(year, month - 1, day, 23, 59, 59);
+    } else if (month) {
+      filterStart = new Date(year, month - 1, 1, 0, 0, 0);
+      filterEnd = new Date(year, month, 0, 23, 59, 59); // 0th day gets the last day of the previous month
+    } else {
+      filterStart = new Date(year, 0, 1, 0, 0, 0);
+      filterEnd = new Date(year, 11, 31, 23, 59, 59);
+    }
+
+    // Hide if created AFTER the filter period ends
+    if (created > filterEnd) return false;
+
+    // Hide if deadline has passed BEFORE the filter period starts
+    if (deadline) {
+      const dbDeadline = new Date(deadline);
+      if (dbDeadline < filterStart) return false;
+    }
+
+    return true;
+  }, [year, month, day]);
+
   useFocusEffect(
     useCallback(() => {
       (async () => {
         try {
           const statuses = await BudgetService.getStatus(year, month, day);
-          setAllBudgets(statuses);
+          setAllBudgets(statuses.filter(b => isActiveInFilter(b.created_at)));
         } catch {}
 
         try {
@@ -232,10 +262,10 @@ export default function HomeScreen({ navigation }: any) {
 
         try {
           const goalsList = await GoalService.list();
-          setGoals(goalsList.filter(g => !g.is_completed));
+          setGoals(goalsList.filter(g => !g.is_completed && isActiveInFilter(g.created_at, g.deadline)));
         } catch {}
       })();
-    }, [filteredItems, year, month, day])
+    }, [filteredItems, year, month, day, isActiveInFilter])
   );
 
   const getGreeting = () => {

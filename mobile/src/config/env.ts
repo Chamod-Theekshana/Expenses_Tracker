@@ -9,7 +9,7 @@ export const CLOUDINARY_UPLOAD_PRESET = 'PROFILE';
 export const API_PORT = 5001;
 
 // 🔥 CHANGE THIS when using a physical phone
-export const REAL_DEVICE_HOST = '192.168.1.129';
+export const REAL_DEVICE_HOST = '10.53.177.155';
 
 const ANDROID_EMULATOR_HOST = '10.0.2.2';
 const IOS_SIMULATOR_HOST = 'localhost';

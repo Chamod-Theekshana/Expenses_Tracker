@@ -1,10 +1,12 @@
 import { sql } from '../config/db';
+import { convert } from '../services/exchangeRateService';
 
 export type BudgetRow = {
   id: number;
   user_id: string;
   category: string;
   amount: number;
+  currency: string;
   period: string;
   created_at: string;
 };
@@ -17,7 +19,7 @@ export type BudgetStatus = BudgetRow & {
 export class BudgetModel {
   static async listByUser(userId: string): Promise<BudgetRow[]> {
     const rows = await sql`
-      SELECT id, user_id, category, amount, period, created_at
+      SELECT id, user_id, category, amount, currency, period, created_at
       FROM budgets
       WHERE user_id = ${userId}
       ORDER BY category ASC
@@ -27,7 +29,7 @@ export class BudgetModel {
 
   static async findById(userId: string, id: number): Promise<BudgetRow | null> {
     const rows = await sql`
-      SELECT id, user_id, category, amount, period, created_at
+      SELECT id, user_id, category, amount, currency, period, created_at
       FROM budgets
       WHERE id = ${id} AND user_id = ${userId}
     `;
@@ -38,12 +40,13 @@ export class BudgetModel {
     userId: string,
     category: string,
     amount: number,
+    currency: string = 'LKR',
     period: string = 'monthly'
   ): Promise<BudgetRow> {
     const rows = await sql`
-      INSERT INTO budgets (user_id, category, amount, period)
-      VALUES (${userId}, ${category}, ${amount}, ${period})
-      RETURNING id, user_id, category, amount, period, created_at
+      INSERT INTO budgets (user_id, category, amount, currency, period)
+      VALUES (${userId}, ${category}, ${amount}, ${currency}, ${period})
+      RETURNING id, user_id, category, amount, currency, period, created_at
     `;
     return rows[0] as BudgetRow;
   }
@@ -53,7 +56,7 @@ export class BudgetModel {
       UPDATE budgets
       SET amount = ${amount}
       WHERE id = ${id} AND user_id = ${userId}
-      RETURNING id, user_id, category, amount, period, created_at
+      RETURNING id, user_id, category, amount, currency, period, created_at
     `;
     return (rows[0] as BudgetRow) || null;
   }
@@ -101,38 +104,67 @@ export class BudgetModel {
       endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
     }
 
-    const rows = await sql`
+    const budgets = await sql`
       SELECT
-        b.id,
-        b.user_id,
-        b.category,
-        b.amount,
-        b.period,
-        b.created_at,
-        COALESCE(ABS(SUM(
-          CASE WHEN t.amount < 0
-               AND t.created_at >= ${startDate}::date
-               AND t.created_at <= ${endDate}::date + interval '1 day'
-               THEN t.amount ELSE 0 END
-        )), 0) AS spent
-      FROM budgets b
-      LEFT JOIN transactions t
-        ON t.user_id = b.user_id AND t.category = b.category
-      WHERE b.user_id = ${userId}
-      GROUP BY b.id, b.user_id, b.category, b.amount, b.period, b.created_at
-      ORDER BY b.category ASC
+        id,
+        user_id,
+        category,
+        amount,
+        currency,
+        period,
+        created_at
+      FROM budgets
+      WHERE user_id = ${userId}
+      ORDER BY category ASC
     `;
 
-    return rows.map((r: any) => ({
-      id: r.id,
-      user_id: r.user_id,
-      category: r.category,
-      amount: Number(r.amount),
-      period: r.period,
-      created_at: r.created_at,
-      spent: Number(r.spent),
-      percentage: Number(r.amount) > 0 ? Math.round((Number(r.spent) / Number(r.amount)) * 100) : 0,
-    }));
+    // Fetch transactions in this date range that are expenses (< 0)
+    const transactions = await sql`
+      SELECT category, amount, currency
+      FROM transactions
+      WHERE user_id = ${userId}
+        AND amount < 0
+        AND created_at >= ${startDate}::date
+        AND created_at <= ${endDate}::date + interval '1 day'
+    `;
+
+    const budgetStatuses = await Promise.all(
+      budgets.map(async (b: any) => {
+        let spentAccumulator = 0;
+        const budgetCategory = b.category;
+        const budgetCurrency = b.currency || 'LKR';
+
+        // Find matching transactions for this category
+        const matchingTxs = transactions.filter((t: any) => t.category === budgetCategory);
+        
+        for (const tx of matchingTxs) {
+          // Transactions amount is negative, take absolute value
+          const absAmount = Math.abs(Number(tx.amount));
+          const txCurrency = tx.currency || 'LKR';
+          
+          // Convert the transaction amount to the budget's currency
+          const convertedAmount = await convert(absAmount, txCurrency, budgetCurrency);
+          spentAccumulator += convertedAmount;
+        }
+
+        const amountVal = Number(b.amount);
+        const spentVal = spentAccumulator;
+
+        return {
+          id: b.id,
+          user_id: b.user_id,
+          category: b.category,
+          amount: amountVal,
+          currency: budgetCurrency,
+          period: b.period,
+          created_at: b.created_at,
+          spent: spentVal,
+          percentage: amountVal > 0 ? Math.round((spentVal / amountVal) * 100) : 0,
+        };
+      })
+    );
+
+    return budgetStatuses;
   }
 
   /**
@@ -140,7 +172,7 @@ export class BudgetModel {
    */
   static async findByCategory(userId: string, category: string): Promise<BudgetRow | null> {
     const rows = await sql`
-      SELECT id, user_id, category, amount, period, created_at
+      SELECT id, user_id, category, amount, currency, period, created_at
       FROM budgets
       WHERE user_id = ${userId} AND category = ${category}
     `;
@@ -150,18 +182,26 @@ export class BudgetModel {
   /**
    * Get current month spending for a specific category.
    */
-  static async getCategorySpent(userId: string, category: string): Promise<number> {
+  static async getCategorySpent(userId: string, category: string, currency: string = 'LKR'): Promise<number> {
     const now = new Date();
     const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
     const rows = await sql`
-      SELECT COALESCE(ABS(SUM(amount)), 0) AS spent
+      SELECT amount, currency
       FROM transactions
       WHERE user_id = ${userId}
         AND category = ${category}
         AND amount < 0
         AND created_at >= ${firstOfMonth}::date
     `;
-    return Number(rows[0]?.spent ?? 0);
+    
+    let spent = 0;
+    for (const tx of rows) {
+      const absAmount = Math.abs(Number(tx.amount));
+      const txCurrency = tx.currency || 'LKR';
+      spent += await convert(absAmount, txCurrency, currency);
+    }
+
+    return spent;
   }
 }

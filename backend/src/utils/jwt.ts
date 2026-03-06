@@ -15,7 +15,8 @@ function getSecret() {
 }
 
 export function signAccessToken(user: JwtUserPayload) {
-  return jwt.sign(user, getSecret(), { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
+  const options: jwt.SignOptions = { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any };
+  return jwt.sign(user, getSecret(), options);
 }
 
 export function verifyAccessToken(token: string): JwtUserPayload {

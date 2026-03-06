@@ -10,7 +10,7 @@ export type CategoryRow = {
 
 export class CategoryModel {
   static async listByUser(userId: string) {
-    const rows = await sql<CategoryRow[]>`
+    const rows = await sql`
       SELECT id, user_id, name, type, created_at
       FROM categories
       WHERE user_id = ${userId}
@@ -20,7 +20,7 @@ export class CategoryModel {
   }
 
   static async create(userId: string, name: string, type: 'expense' | 'income' | 'both' = 'expense') {
-    const rows = await sql<CategoryRow[]>`
+    const rows = await sql`
       INSERT INTO categories (user_id, name, type)
       VALUES (${userId}, ${name}, ${type})
       RETURNING id, user_id, name, type, created_at
@@ -29,7 +29,7 @@ export class CategoryModel {
   }
 
   static async update(userId: string, id: number, name: string, type: 'expense' | 'income' | 'both') {
-    const rows = await sql<CategoryRow[]>`
+    const rows = await sql`
       UPDATE categories
       SET name = ${name}, type = ${type}
       WHERE id = ${id} AND user_id = ${userId}
@@ -39,7 +39,7 @@ export class CategoryModel {
   }
 
   static async delete(userId: string, id: number) {
-    const rows = await sql<{ id: number }[]>`
+    const rows = await sql`
       DELETE FROM categories
       WHERE id = ${id} AND user_id = ${userId}
       RETURNING id
@@ -49,7 +49,7 @@ export class CategoryModel {
 
   static async seedDefaults(userId: string) {
     // Only seed if user has none.
-    const existing = await sql<{ c: number }[]>`SELECT COUNT(*)::int AS c FROM categories WHERE user_id = ${userId}`;
+    const existing = await sql`SELECT COUNT(*)::int AS c FROM categories WHERE user_id = ${userId}`;
     if ((existing[0]?.c ?? 0) > 0) return;
 
     const defaults: Array<{ name: string; type: 'expense' | 'income' | 'both' }> = [

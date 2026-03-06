@@ -20,7 +20,6 @@ import { CategoryService, Category } from '../../services/CategoryService';
 import { uploadImageToCloudinary } from '../../utils/cloudinary';
 
 const fallbackExpenseCategories = ['Food', 'Transport', 'Bills', 'Shopping', 'Other'];
-const CURRENCY_OPTIONS = ['LKR', 'USD', 'EUR', 'GBP'];
 
 export default function AddTransactionScreen({ navigation }: any) {
   const { addTx } = useContext(TransactionsContext);
@@ -34,7 +33,6 @@ export default function AddTransactionScreen({ navigation }: any) {
   const [isIncome, setIsIncome] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dateISO, setDateISO] = useState(() => new Date().toISOString().slice(0, 10));
-  const [currency, setCurrency] = useState(preferredCurrency || 'LKR');
 
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
@@ -118,7 +116,7 @@ export default function AddTransactionScreen({ navigation }: any) {
           title: title.trim(),
           category: isIncome ? 'Income' : category,
           amount: isIncome ? amount : -amount,
-          currency,
+          currency: preferredCurrency || 'LKR',
           dateISO,
           receiptUrl: receiptUrl || null,
         },
@@ -191,25 +189,7 @@ export default function AddTransactionScreen({ navigation }: any) {
           </View>
         </View>
 
-        <View style={{ height: 18 }} />
-
-        <AppText muted style={{ marginBottom: 10, fontSize: 13 }}>
-          Currency
-        </AppText>
-        <View style={styles.chipsRow}>
-          {CURRENCY_OPTIONS.map((cur) => (
-            <View key={cur} style={{ flex: 1 }}>
-              <Chip
-                label={cur}
-                selected={currency === cur}
-                onPress={() => setCurrency(cur)}
-                size="sm"
-                style={{ justifyContent: 'center' }}
-              />
-            </View>
-          ))}
-        </View>
-
+        {/* Currency selection removed to enforce global Profile preference */}
         <View style={{ height: 18 }} />
 
         <View style={styles.chipsRow}>

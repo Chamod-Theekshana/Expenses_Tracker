@@ -43,6 +43,7 @@ import {
   Paperclip,
   PartyPopper,
   FileText,
+  CheckCircle,
   type LucideProps,
 } from 'lucide-react-native';
 
@@ -88,11 +89,13 @@ const iconMap = {
   image: Image,
   'party-popper': PartyPopper,
   'file-text': FileText,
+  paperclip: Paperclip,
+  'check-circle': CheckCircle,
 } as const;
 
 export type IconName = keyof typeof iconMap;
 
-type IconSize = 12 | 14 | 16 | 18 | 20 | 24 | 28 | 32;
+type IconSize = 12 | 14 | 16 | 18 | 20 | 24 | 28 | 32 | 48;
 
 type Props = {
   name: IconName;

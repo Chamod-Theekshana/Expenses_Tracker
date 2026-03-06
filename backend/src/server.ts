@@ -20,6 +20,7 @@ import exchangeRateRoutes from './routes/exchangeRateRoutes';
 
 import { initSocket } from './socket';
 import { startRecurringScheduler } from './services/recurringScheduler';
+import { GoalReminderService } from './services/GoalReminderService';
 
 dotenv.config();
 
@@ -53,6 +54,7 @@ initSocket(server);
 
 initDB().then(() => {
   startRecurringScheduler();
+  GoalReminderService.startDailyReminders();
   server.listen(PORT, () => {
     console.log('SERVER IS UP AND RUNNING ON PORT:', PORT);
   });

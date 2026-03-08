@@ -2,6 +2,10 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import http from 'http';
+import helmet from 'helmet';
+
+// Load env FIRST before any module that reads process.env
+dotenv.config();
 
 import { initDB } from './config/db';
 import rateLimiter from './middleware/RateLimiter';
@@ -17,27 +21,47 @@ import budgetsRoutes from './routes/budgetsRoutes';
 import recurringRoutes from './routes/recurringRoutes';
 import goalsRoutes from './routes/goalsRoutes';
 import exchangeRateRoutes from './routes/exchangeRateRoutes';
+import otpRoutes from './routes/otpRoutes';
 
 import { initSocket } from './socket';
 import { startRecurringScheduler } from './services/recurringScheduler';
 import { GoalReminderService } from './services/GoalReminderService';
 
-dotenv.config();
-
 const app = express();
 const PORT = process.env.PORT || 5001;
 
+// Security headers
+app.use(helmet());
+
+// CORS
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
+  : ['*'];
+
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()) : '*',
+    origin: allowedOrigins.includes('*') ? '*' : (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   }),
 );
+
 app.use(requestLogger);
 app.use(rateLimiter);
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
+
+// Health check (no auth, no rate limit logging noise)
+app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/auth', signupRoutes);
+app.use('/api/auth', otpRoutes);
 app.use('/api/transaction', transactionsRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/notifications', notificationRoutes);
@@ -47,15 +71,32 @@ app.use('/api/recurring', recurringRoutes);
 app.use('/api/goals', goalsRoutes);
 app.use('/api/exchange-rates', exchangeRateRoutes);
 
+// 404 handler
+app.use((_req, res) => res.status(404).json({ message: 'Not found' }));
+
 app.use(errorHandler);
 
 const server = http.createServer(app);
 initSocket(server);
 
-initDB().then(() => {
-  startRecurringScheduler();
-  GoalReminderService.startDailyReminders();
-  server.listen(PORT, () => {
-    console.log('SERVER IS UP AND RUNNING ON PORT:', PORT);
+initDB()
+  .then(async () => {
+    await startRecurringScheduler();
+    GoalReminderService.startDailyReminders();
+    server.listen(PORT, () => {
+      console.log(`[Server] Running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('[Server] Failed to initialize:', err);
+    process.exit(1);
+  });
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('[Server] SIGTERM received, shutting down gracefully...');
+  server.close(() => {
+    console.log('[Server] Closed.');
+    process.exit(0);
   });
 });

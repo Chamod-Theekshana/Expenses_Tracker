@@ -1,22 +1,28 @@
-
 import ratelimit from '../config/upstash';
+import type { Request, Response, NextFunction } from 'express';
 
+const rateLimiter = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const forwarded = req.headers['x-forwarded-for'];
+    const ip = (
+      (Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0]?.trim()) ||
+      req.socket?.remoteAddress ||
+      req.ip ||
+      'unknown'
+    );
 
-const rateLimiter = async (req:any, res:any, next:any) => {
-    try {
-        const ip = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
-        const { success } = await ratelimit.limit(ip);
+    const { success } = await ratelimit.limit(ip);
 
-        if (!success) {
-            return res.status(429).json({ message: "Too many requests, please try again later." });
-        }
-
-        next();
+    if (!success) {
+      return res.status(429).json({ message: 'Too many requests, please try again later.' });
     }
-    catch (error) {
-        console.error("Rate limiting error:", error);
-        res.status(500).json({ message: "Internal server error" });
-    }
-}
+
+    return next();
+  } catch (error) {
+    // On rate limiter failure (e.g., Redis unavailable), allow request through
+    console.error('[RateLimiter] Error:', error);
+    return next();
+  }
+};
 
 export default rateLimiter;

@@ -12,19 +12,36 @@ export type Budget = {
 export type BudgetStatus = Budget & {
   spent: number;
   percentage: number;
+  remaining: number;
+  /** true = some multi-currency transactions couldn't be converted; spent may be understated */
+  conversion_error: boolean;
 };
+
+function mapBudget(b: any): Budget {
+  return {
+    id: String(b.id),
+    category: String(b.category),
+    amount: Number(b.amount),
+    currency: String(b.currency || 'LKR'),
+    period: String(b.period || 'monthly'),
+    created_at: String(b.created_at || new Date().toISOString()),
+  };
+}
+
+function mapBudgetStatus(b: any): BudgetStatus {
+  return {
+    ...mapBudget(b),
+    spent: Number(b.spent ?? 0),
+    percentage: Number(b.percentage ?? 0),
+    remaining: Number(b.remaining ?? Math.max(0, Number(b.amount) - Number(b.spent ?? 0))),
+    conversion_error: Boolean(b.conversion_error ?? false),
+  };
+}
 
 export class BudgetService {
   static async list(): Promise<Budget[]> {
     const data = await apiFetch<{ budgets: any[] }>('/api/budgets');
-    return (data.budgets || []).map((b) => ({
-      id: String(b.id),
-      category: String(b.category),
-      amount: Number(b.amount),
-      currency: String(b.currency || 'LKR'),
-      period: String(b.period || 'monthly'),
-      created_at: String(b.created_at || new Date().toISOString()),
-    }));
+    return (data.budgets || []).map(mapBudget);
   }
 
   static async getStatus(
@@ -36,19 +53,9 @@ export class BudgetService {
     if (year) parts.push(`year=${year}`);
     if (month) parts.push(`month=${month}`);
     if (day) parts.push(`day=${day}`);
-    let qs = parts.length > 0 ? `?${parts.join('&')}` : '';
-    const url = `/api/budgets/status${qs}`;
-    const data = await apiFetch<{ budgets: any[] }>(url);
-    return (data.budgets || []).map((b) => ({
-      id: String(b.id),
-      category: String(b.category),
-      amount: Number(b.amount),
-      currency: String(b.currency || 'LKR'),
-      period: String(b.period || 'monthly'),
-      created_at: String(b.created_at || new Date().toISOString()),
-      spent: Number(b.spent),
-      percentage: Number(b.percentage),
-    }));
+    const qs = parts.length > 0 ? `?${parts.join('&')}` : '';
+    const data = await apiFetch<{ budgets: any[] }>(`/api/budgets/status${qs}`);
+    return (data.budgets || []).map(mapBudgetStatus);
   }
 
   static async create(category: string, amount: number, currency: string = 'LKR'): Promise<Budget> {
@@ -56,14 +63,7 @@ export class BudgetService {
       method: 'POST',
       body: JSON.stringify({ category, amount, currency }),
     });
-    return {
-      id: String(data.budget.id),
-      category: data.budget.category,
-      amount: Number(data.budget.amount),
-      currency: String(data.budget.currency || 'LKR'),
-      period: data.budget.period,
-      created_at: String(data.budget.created_at || new Date().toISOString()),
-    };
+    return mapBudget(data.budget);
   }
 
   static async update(id: string, amount: number): Promise<Budget> {
@@ -71,14 +71,7 @@ export class BudgetService {
       method: 'PUT',
       body: JSON.stringify({ amount }),
     });
-    return {
-      id: String(data.budget.id),
-      category: data.budget.category,
-      amount: Number(data.budget.amount),
-      currency: String(data.budget.currency || 'LKR'),
-      period: data.budget.period,
-      created_at: String(data.budget.created_at || new Date().toISOString()),
-    };
+    return mapBudget(data.budget);
   }
 
   static async remove(id: string): Promise<void> {

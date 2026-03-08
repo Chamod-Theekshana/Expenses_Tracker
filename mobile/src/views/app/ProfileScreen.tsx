@@ -85,8 +85,8 @@ export default function ProfileScreen({ navigation }: any) {
       if (newPassword !== confirmPassword) {
         return Alert.alert("Error", "New passwords do not match");
       }
-      if (newPassword.length < 6) {
-        return Alert.alert("Error", "Password must be at least 6 characters");
+      if (newPassword.length < 8) {
+        return Alert.alert("Error", "Password must be at least 8 characters");
       }
       setSavingPassword(true);
       await ProfileService.updatePassword(userId!, currentPassword, newPassword);

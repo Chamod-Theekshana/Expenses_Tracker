@@ -89,7 +89,7 @@ export default function TransactionsScreen() {
 
   const handleDelete = async (id: string) => {
     try {
-      await removeTx(id);
+      await removeTx(id, userId!);
     } catch (error: any) {
       Alert.alert('Error', error?.message || 'Failed to delete transaction');
     }

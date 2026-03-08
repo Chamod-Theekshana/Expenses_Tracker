@@ -4,13 +4,9 @@ import { sendPushToUser } from './pushService';
 import { emitToUser } from '../socket';
 
 /**
- * Process all due recurring transactions:
- * 1. Find recurrences where next_run <= today and is_active = true
- * 2. Create an actual transaction for each
- * 3. Advance next_run by the frequency interval
- * 4. Notify the user via push + socket
+ * Process all due recurring transactions.
  */
-async function processRecurringTransactions() {
+async function processRecurringTransactions(): Promise<void> {
   try {
     const dueItems = await RecurringModel.getDueRecurrences();
 
@@ -23,31 +19,28 @@ async function processRecurringTransactions() {
 
     for (const item of dueItems) {
       try {
-        // Create actual transaction
         const tx = await TransactionModel.create(
           item.user_id,
           item.title,
           Number(item.amount),
           item.category,
-          new Date().toISOString().slice(0, 10) // today's date
+          new Date().toISOString().slice(0, 10),
+          item.currency || 'LKR',
         );
 
-        // Advance next_run
         await RecurringModel.advanceNextRun(item.id, item.frequency);
 
-        // Notify user via socket
         emitToUser(item.user_id, 'tx:new', {
           title: 'Recurring transaction created',
-          body: `${item.title} (${item.amount})`,
+          body: `${item.title} (${Math.abs(Number(item.amount)).toFixed(2)})`,
           transaction: tx,
         });
         emitToUser(item.user_id, 'tx:summary:invalidate', { user_id: item.user_id });
 
-        // Send push notification
         await sendPushToUser(
           item.user_id,
           `🔄 Recurring: ${item.title}`,
-          `${Number(item.amount) < 0 ? 'Expense' : 'Income'} of ₨.${Math.abs(Number(item.amount)).toFixed(2)} for ${item.category} has been recorded.`,
+          `${Number(item.amount) < 0 ? 'Expense' : 'Income'} of ${Math.abs(Number(item.amount)).toFixed(2)} ${item.currency || 'LKR'} for ${item.category} has been recorded.`,
           { type: 'recurring_tx', transactionId: String(tx.id) }
         );
 
@@ -69,7 +62,6 @@ function msUntilNextDailyTime(hour: number, minute: number): number {
   const next = new Date(now);
   next.setHours(hour, minute, 0, 0);
 
-  // If 9:00 AM already passed today, schedule for tomorrow
   if (next <= now) {
     next.setDate(next.getDate() + 1);
   }
@@ -80,10 +72,10 @@ function msUntilNextDailyTime(hour: number, minute: number): number {
 /**
  * Schedule recurring processing at a specific daily time, then repeat every 24h.
  */
-function scheduleDailyAt(hour: number, minute: number) {
+function scheduleDailyAt(hour: number, minute: number): void {
   const delay = msUntilNextDailyTime(hour, minute);
   const nextRun = new Date(Date.now() + delay);
-  console.log(`[Recurring] Next check scheduled at ${nextRun.toString()}`);
+  console.log(`[Recurring] Next check scheduled at ${nextRun.toISOString()}`);
 
   setTimeout(async () => {
     try {
@@ -91,7 +83,6 @@ function scheduleDailyAt(hour: number, minute: number) {
     } catch (err) {
       console.error('[Recurring] Error in daily run:', err);
     } finally {
-      // Reschedule for same time tomorrow
       scheduleDailyAt(hour, minute);
     }
   }, delay);
@@ -99,10 +90,17 @@ function scheduleDailyAt(hour: number, minute: number) {
 
 /**
  * Start the recurring scheduler — runs daily at 9:00 AM.
+ * Also processes immediately on startup to catch any missed runs.
  */
-export function startRecurringScheduler() {
+export async function startRecurringScheduler(): Promise<void> {
   console.log('[Recurring] Scheduler started — runs daily at 9:00 AM.');
 
-  // Schedule daily at 9:00 AM (no immediate run on startup)
-  scheduleDailyAt(1, 26);
+  // Process immediately on startup to catch missed runs (e.g. server was down)
+  try {
+    await processRecurringTransactions();
+  } catch (err) {
+    console.error('[Recurring] Error in startup run:', err);
+  }
+
+  scheduleDailyAt(9, 0);
 }

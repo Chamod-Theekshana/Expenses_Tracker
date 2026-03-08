@@ -5,30 +5,26 @@ import { sendPushToUser } from './pushService';
 export class GoalReminderService {
   /**
    * Starts the cron job to check for goals approaching their deadlines.
-   * Runs every day at 09:00 AM.
+   * Runs every day at 9:00 AM server time.
    */
-  static startDailyReminders() {
+  static startDailyReminders(): void {
     console.log('[Goal Reminder] Starting daily goal reminder cron job (09:00 AM)...');
-    
-    // Schedule for 09:00 AM every day
-    cron.schedule('0 15 * * *', async () => {
+
+    // '0 9 * * *' = 9:00 AM every day
+    cron.schedule('0 9 * * *', async () => {
       console.log('[Goal Reminder] Running daily check for goal deadlines...');
-      await this.checkAndSendReminders();
+      await GoalReminderService.checkAndSendReminders();
     });
   }
 
-  /**
-   * Finds all active goals and sends daily push notifications
-   */
-  static async checkAndSendReminders() {
+  static async checkAndSendReminders(): Promise<void> {
     try {
-      // Find ALL goals that are not completed (whether they have a deadline or not)
       const rows = await sql`
-        SELECT 
+        SELECT
           id, user_id, name, target_amount, current_amount, deadline,
-          CASE WHEN target_amount > 0 
-               THEN ROUND((current_amount / target_amount) * 100, 1) 
-               ELSE 0 
+          CASE WHEN target_amount > 0
+               THEN ROUND((current_amount / target_amount) * 100, 1)
+               ELSE 0
           END AS progress_percentage
         FROM goals
         WHERE is_completed = false
@@ -44,11 +40,10 @@ export class GoalReminderService {
       const now = new Date();
       now.setHours(0, 0, 0, 0);
 
-      for (const row of rows) {
+      for (const row of rows as any[]) {
         let messageBody = '';
 
         if (row.deadline) {
-          // Goal has a deadline - report days remaining
           const deadlineDate = new Date(row.deadline);
           deadlineDate.setHours(0, 0, 0, 0);
 
@@ -56,17 +51,18 @@ export class GoalReminderService {
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
           if (diffDays < 0) {
-             messageBody = `Your goal "${row.name}" is overdue! Keep pushing to reach it!`;
+            messageBody = `Your goal "${row.name}" deadline has passed. Keep pushing to reach it!`;
           } else if (diffDays === 0) {
-            messageBody = `Your goal "${row.name}" is due today!`;
+            messageBody = `Your goal "${row.name}" is due today! You're ${row.progress_percentage}% there.`;
           } else if (diffDays === 1) {
-            messageBody = `Your goal "${row.name}" is due tomorrow!`;
+            messageBody = `Your goal "${row.name}" is due tomorrow! You're ${row.progress_percentage}% there.`;
+          } else if (diffDays <= 7) {
+            messageBody = `Only ${diffDays} days left for "${row.name}"! You're ${row.progress_percentage}% there.`;
           } else {
-            messageBody = `Your goal "${row.name}" has ${diffDays} days left!`;
+            messageBody = `Keep saving for "${row.name}"! You're ${row.progress_percentage}% there (${diffDays} days left).`;
           }
         } else {
-          // No deadline - report progress percentage
-          messageBody = `Keep saving for "${row.name}"! You are ${row.progress_percentage}% there.`;
+          messageBody = `Keep saving for "${row.name}"! You're ${row.progress_percentage}% there.`;
         }
 
         await sendPushToUser(

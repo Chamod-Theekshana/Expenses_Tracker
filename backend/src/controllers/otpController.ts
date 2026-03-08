@@ -1,70 +1,79 @@
 import { sql } from '../config/db';
 import { generateOTP, storeOTP, verifyOTP, canResendOTP, updateResendTime } from '../config/otp';
 import { sendOTPEmail } from '../config/email';
-import crypto from 'crypto';
+import { signAccessToken } from '../utils/jwt';
+import { CategoryModel } from '../models/CategoryModel';
+import bcrypt from 'bcrypt';
+import type { Request, Response } from 'express';
 
-export async function sendOTP(req: any, res: any) {
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export async function sendOTP(req: Request, res: Response) {
   try {
-    const { email } = req.body;
+    const { email } = req.body ?? {};
 
-    if (!email || !email.includes('@')) {
+    if (!email || !EMAIL_REGEX.test(String(email))) {
       return res.status(400).json({ message: 'Valid email is required' });
     }
 
-    const { allowed, waitSeconds } = canResendOTP(email);
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const { allowed, waitSeconds } = canResendOTP(normalizedEmail);
     if (!allowed) {
       return res.status(429).json({ message: `Please wait ${waitSeconds}s before resending` });
     }
 
     const otp = generateOTP();
-    storeOTP(email, otp);
-    updateResendTime(email);
+    storeOTP(normalizedEmail, otp);
+    updateResendTime(normalizedEmail);
 
-    await sendOTPEmail(email, otp);
+    await sendOTPEmail(normalizedEmail, otp);
 
-    res.status(200).json({ message: 'OTP sent to email' });
+    return res.status(200).json({ message: 'OTP sent to email' });
   } catch (error) {
     console.error('Error sending OTP:', error);
-    res.status(500).json({ message: 'Failed to send OTP' });
+    return res.status(500).json({ message: 'Failed to send OTP' });
   }
 }
 
-export async function verifyOTPAndSignUp(req: any, res: any) {
+export async function verifyOTPAndSignUp(req: Request, res: Response) {
   try {
-    const { email, otp } = req.body;
+    const { email, otp } = req.body ?? {};
 
     if (!email || !otp) {
       return res.status(400).json({ message: 'Email and OTP are required' });
     }
 
-    const { valid, message } = verifyOTP(email, otp);
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const { valid, message } = verifyOTP(normalizedEmail, String(otp));
     if (!valid) {
       return res.status(401).json({ message });
     }
 
-    // Check if user exists
-    let user = await sql`SELECT id, email FROM users WHERE email = ${email.toLowerCase()}`;
+    let userRows = await sql`SELECT id, email FROM users WHERE email = ${normalizedEmail}`;
+    let user = userRows[0] as any;
 
-    // Create user if doesn't exist
-    if (user.length === 0) {
+    if (!user) {
+      // Create user with a random non-usable password (OTP-based accounts)
+      const randomHash = await bcrypt.hash(Math.random().toString(36), 12);
       const result = await sql`
         INSERT INTO users (email, password)
-        VALUES (${email.toLowerCase()}, ${crypto.randomBytes(32).toString('hex')})
+        VALUES (${normalizedEmail}, ${randomHash})
         RETURNING id, email
       `;
-      user = result;
+      user = (result as any)[0];
+      await CategoryModel.seedDefaults(String(user.id));
     }
 
-    // Generate JWT token (simple implementation)
-    const token = crypto.randomBytes(32).toString('hex');
+    // Issue a proper JWT token (not random bytes)
+    const token = signAccessToken({ id: user.id, email: user.email });
 
-    res.status(200).json({
+    return res.status(200).json({
       message: 'Verified successfully',
-      user: { id: user[0].id, email: user[0].email },
+      user: { id: user.id, email: user.email },
       token,
     });
   } catch (error) {
     console.error('Error verifying OTP:', error);
-    res.status(500).json({ message: 'Verification failed' });
+    return res.status(500).json({ message: 'Verification failed' });
   }
 }

@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { randomInt } from 'crypto';
 
 export interface SignupSession {
   email: string;
@@ -18,7 +19,7 @@ const RESEND_COOLDOWN = 30 * 1000; // 30 seconds
 const MAX_ATTEMPTS = 5;
 
 export function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
 }
 
 export function generateSignupToken(): string {

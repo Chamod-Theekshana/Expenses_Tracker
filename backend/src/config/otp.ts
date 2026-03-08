@@ -1,4 +1,4 @@
-import {createHash} from 'crypto';
+import { randomInt, createHash } from 'crypto';
 
 export interface OTPRecord {
   email: string;
@@ -12,11 +12,14 @@ export interface OTPRecord {
 const otpStore = new Map<string, OTPRecord>();
 
 const RESEND_COOLDOWN = 30 * 1000; // 30 seconds
-const OTP_EXPIRY = 5 * 60 * 1000; // 5 minutes
+const OTP_EXPIRY = 5 * 60 * 1000;  // 5 minutes
 const MAX_ATTEMPTS = 5;
 
+/**
+ * Generates a cryptographically secure 6-digit OTP.
+ */
 export function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
 }
 
 export function hashOTP(otp: string): string {
@@ -44,22 +47,23 @@ export function verifyOTP(email: string, otp: string): { valid: boolean; message
 
   if (Date.now() > record.expiresAt) {
     otpStore.delete(email);
-    return { valid: false, message: 'OTP expired' };
+    return { valid: false, message: 'OTP has expired. Please request a new one.' };
   }
 
   if (record.attempts >= MAX_ATTEMPTS) {
     otpStore.delete(email);
-    return { valid: false, message: 'Max attempts exceeded' };
+    return { valid: false, message: 'Too many incorrect attempts. Please request a new OTP.' };
   }
 
   record.attempts++;
 
-  if (hashOTP(otp) === record.hashedOtp) {
+  if (hashOTP(String(otp)) === record.hashedOtp) {
     otpStore.delete(email);
     return { valid: true, message: 'OTP verified' };
   }
 
-  return { valid: false, message: 'Invalid OTP' };
+  const remaining = MAX_ATTEMPTS - record.attempts;
+  return { valid: false, message: `Invalid OTP. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.` };
 }
 
 export function canResendOTP(email: string): { allowed: boolean; waitSeconds: number } {

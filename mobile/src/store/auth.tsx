@@ -17,7 +17,7 @@ type AuthContextValue = AuthState & {
   setAuthToken: (token: string, user: { id: string; email: string }) => Promise<void>;
 };
 
-const KEY = 'expense_tracker_auth_v1';
+const STORAGE_KEY = 'expense_tracker_auth_v1';
 
 export const AuthContext = createContext<AuthContextValue>({
   userEmail: null,
@@ -36,63 +36,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Restore session on mount
   useEffect(() => {
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(KEY);
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
         if (raw) {
           const parsed = JSON.parse(raw);
+          const restoredToken = parsed?.token ?? null;
           setUserEmail(parsed?.email ?? null);
           setUserId(parsed?.id ?? null);
-          setToken(parsed?.token ?? null);
-          setApiAuthToken(parsed?.token ?? null);
+          setToken(restoredToken);
+          setApiAuthToken(restoredToken);
         }
+      } catch (err) {
+        console.error('[Auth] Failed to restore session:', err);
+        // Clear corrupted storage
+        await AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
       } finally {
         setIsLoading(false);
       }
     })();
   }, []);
 
+  const persistSession = useCallback(
+    async (email: string, id: string, newToken: string) => {
+      const data = { email, id, token: newToken };
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      setUserEmail(email);
+      setUserId(id);
+      setToken(newToken);
+      setApiAuthToken(newToken);
+    },
+    [],
+  );
+
   const signIn = useCallback(async (email: string, password: string) => {
     const response = await AuthService.signIn(email, password);
-    await AsyncStorage.setItem(
-      KEY,
-      JSON.stringify({ email: response.user.email, id: String(response.user.id), token: response.token }),
-    );
-    setUserEmail(response.user.email);
-    setUserId(String(response.user.id));
-    setToken(response.token);
-    setApiAuthToken(response.token);
-  }, []);
+    await persistSession(response.user.email, String(response.user.id), response.token);
+  }, [persistSession]);
 
   const signUp = useCallback(async (email: string, password: string) => {
     const response = await AuthService.signUp(email, password);
-    await AsyncStorage.setItem(
-      KEY,
-      JSON.stringify({ email: response.user.email, id: String(response.user.id), token: response.token }),
-    );
-    setUserEmail(response.user.email);
-    setUserId(String(response.user.id));
-    setToken(response.token);
-    setApiAuthToken(response.token);
-  }, []);
+    await persistSession(response.user.email, String(response.user.id), response.token);
+  }, [persistSession]);
 
   const signOut = useCallback(async () => {
-    await AsyncStorage.removeItem(KEY);
-    setUserEmail(null);
-    setUserId(null);
-    setToken(null);
-    setApiAuthToken(null);
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEY);
+    } catch (err) {
+      console.error('[Auth] Failed to clear storage on sign out:', err);
+    } finally {
+      setUserEmail(null);
+      setUserId(null);
+      setToken(null);
+      setApiAuthToken(null);
+    }
   }, []);
 
-  const setAuthToken = useCallback(async (newToken: string, user: { id: string; email: string }) => {
-    const data = { email: user.email, id: user.id, token: newToken };
-    await AsyncStorage.setItem(KEY, JSON.stringify(data));
-    setUserEmail(user.email);
-    setUserId(user.id);
-    setToken(newToken);
-    setApiAuthToken(newToken);
-  }, []);
+  const setAuthToken = useCallback(
+    async (newToken: string, user: { id: string; email: string }) => {
+      await persistSession(user.email, user.id, newToken);
+    },
+    [persistSession],
+  );
 
   const value = useMemo(
     () => ({ userEmail, userId, token, isLoading, signIn, signUp, signOut, setAuthToken }),

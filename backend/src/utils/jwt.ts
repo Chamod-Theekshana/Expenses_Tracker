@@ -5,18 +5,21 @@ export type JwtUserPayload = {
   email: string;
 };
 
-function getSecret() {
+function getSecret(): string {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    // Fail fast rather than silently running insecure.
     throw new Error('JWT_SECRET is not set');
   }
   return secret;
 }
 
-export function signAccessToken(user: JwtUserPayload) {
-  const options: jwt.SignOptions = { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any };
-  return jwt.sign(user, getSecret(), options);
+export function signAccessToken(user: JwtUserPayload): string {
+  const expiresIn = (process.env.JWT_EXPIRES_IN || '7d') as string;
+  return jwt.sign(
+    { id: user.id, email: user.email },
+    getSecret(),
+    { expiresIn } as jwt.SignOptions
+  );
 }
 
 export function verifyAccessToken(token: string): JwtUserPayload {

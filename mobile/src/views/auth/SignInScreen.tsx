@@ -13,23 +13,31 @@ export default function SignInScreen({ navigation }: any) {
   const { signIn } = useContext(AuthContext);
   const { colors } = useContext(ThemeContext);
 
-  const [email, setEmail] = useState('demo@pulsespend.app');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [show, setShow] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const canSubmit = useMemo(() => email.includes('@') && password.length >= 6, [email, password]);
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const canSubmit = useMemo(
+    () => emailValid && password.length >= 6,
+    [emailValid, password],
+  );
 
   const onSubmit = async () => {
-    if (!canSubmit) {
-      Alert.alert('Check details', 'Use a valid email and at least 6 characters password.');
+    if (!emailValid) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
+      return;
+    }
+    if (password.length < 6) {
+      Alert.alert('Invalid Password', 'Password must be at least 6 characters.');
       return;
     }
     try {
       setLoading(true);
       await signIn(email.trim().toLowerCase(), password);
     } catch (e: any) {
-      Alert.alert('Sign in failed', e?.message ?? 'Try again.');
+      Alert.alert('Sign In Failed', e?.message ?? 'Please check your credentials and try again.');
     } finally {
       setLoading(false);
     }
@@ -40,7 +48,7 @@ export default function SignInScreen({ navigation }: any) {
       <AppText title style={{ marginBottom: 6 }}>
         Welcome back
       </AppText>
-      <AppText muted style={{ marginBottom: 18 }}>
+      <AppText muted style={{ marginBottom: 24 }}>
         Sign in to continue tracking your spending.
       </AppText>
 
@@ -54,6 +62,9 @@ export default function SignInScreen({ navigation }: any) {
           autoCapitalize="none"
           keyboardType="email-address"
           placeholder="you@example.com"
+          autoComplete="email"
+          textContentType="emailAddress"
+          returnKeyType="next"
         />
 
         <View style={{ height: 14 }} />
@@ -64,12 +75,16 @@ export default function SignInScreen({ navigation }: any) {
         <AppInput
           value={password}
           onChangeText={setPassword}
-          secureTextEntry={!show}
+          secureTextEntry={!showPassword}
           placeholder="••••••"
+          autoComplete="password"
+          textContentType="password"
+          returnKeyType="done"
+          onSubmitEditing={onSubmit}
           right={
-            <Pressable onPress={() => setShow((p) => !p)} hitSlop={10}>
+            <Pressable onPress={() => setShowPassword((p) => !p)} hitSlop={10}>
               <AppText style={{ color: colors.accent, fontWeight: '600' }}>
-                {show ? 'Hide' : 'Show'}
+                {showPassword ? 'Hide' : 'Show'}
               </AppText>
             </Pressable>
           }
@@ -79,7 +94,7 @@ export default function SignInScreen({ navigation }: any) {
           title="Sign In"
           onPress={onSubmit}
           loading={loading}
-          disabled={!canSubmit}
+          disabled={!canSubmit || loading}
           style={{ marginTop: 16 }}
         />
       </Card>
@@ -87,7 +102,8 @@ export default function SignInScreen({ navigation }: any) {
       <View style={styles.footer}>
         <Pressable onPress={() => navigation.navigate('SignupEmail')} hitSlop={10}>
           <AppText muted>
-            New here? <AppText style={{ color: colors.accent, fontWeight: '600' }}>Create account</AppText>
+            New here?{' '}
+            <AppText style={{ color: colors.accent, fontWeight: '600' }}>Create account</AppText>
           </AppText>
         </Pressable>
       </View>
@@ -104,5 +120,6 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: 'auto',
     paddingBottom: scaleHeight(50),
+    alignItems: 'center',
   },
 });

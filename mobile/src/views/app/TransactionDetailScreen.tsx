@@ -81,7 +81,7 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
     Alert.alert('Delete transaction', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
-        try { setSaving(true); await removeTx(tx.id); navigation.goBack(); }
+        try { setSaving(true); await removeTx(tx.id, userId!); navigation.goBack(); }
         catch (e: any) { Alert.alert('Error', e?.message || 'Failed to delete'); }
         finally { setSaving(false); }
       }},

@@ -74,15 +74,37 @@ export async function contributeToGoal(req: AuthedRequest, res: any) {
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: 'Invalid goal ID' });
 
-    const { amount } = req.body;
+    const { amount, currency } = req.body;
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
       return res.status(400).json({ message: 'amount must be a positive number' });
     }
 
-    const goal = await GoalModel.addContribution(userId, id, Number(amount));
+    // Fetch the goal to know its target currency
+    const existing = await GoalModel.findById(userId, id);
+    if (!existing) return res.status(404).json({ message: 'Not found' });
+
+    let contributionAmount = Number(amount);
+    const fromCurrency = (currency || existing.currency || 'LKR').toUpperCase();
+    const toCurrency = (existing.currency || 'LKR').toUpperCase();
+
+    // Convert contribution to the goal's currency if they differ
+    if (fromCurrency !== toCurrency) {
+      try {
+        const { convert } = await import('../services/exchangeRateService');
+        contributionAmount = await convert(contributionAmount, fromCurrency, toCurrency);
+      } catch (e) {
+        console.warn(`[Goals] Currency conversion ${fromCurrency}→${toCurrency} failed, using raw amount:`, e);
+        // Proceed with raw amount but flag it in the response
+        const goal = await GoalModel.addContribution(userId, id, contributionAmount);
+        if (!goal) return res.status(404).json({ message: 'Not found' });
+        if (goal.is_completed) emitToUser(userId, 'goal:completed', { goal });
+        return res.json({ goal, conversion_warning: `Rate unavailable for ${fromCurrency}→${toCurrency}. Amount recorded as-is.` });
+      }
+    }
+
+    const goal = await GoalModel.addContribution(userId, id, contributionAmount);
     if (!goal) return res.status(404).json({ message: 'Not found' });
 
-    // Emit real-time event if goal was just completed
     if (goal.is_completed) {
       emitToUser(userId, 'goal:completed', { goal });
     }

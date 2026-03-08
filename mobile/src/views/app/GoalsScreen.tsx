@@ -376,7 +376,10 @@ export default function GoalsScreen({ navigation }: any) {
   };
 
   const handleContribute = async (id: string, amount: number) => {
-    const updated = await GoalService.contribute(id, amount);
+    // Find the goal to get its currency — the ContributeModal labels the input in goal.currency
+    const goal = goals.find(g => g.id === id);
+    const currency = goal?.currency || preferredCurrency || 'LKR';
+    const updated = await GoalService.contribute(id, amount, currency);
     setGoals((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
     if (updated.is_completed) {
       setCelebratingId(id);

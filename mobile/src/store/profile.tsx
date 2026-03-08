@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useMemo, useState } from 'react';
 import { ProfileService } from '../services/ProfileService';
 
 type ProfileState = {
@@ -48,7 +48,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       setCurrency(profile.currency || 'USD');
       setDateFormat(profile.date_format || 'DD/MM/YYYY');
     } catch (error) {
-      console.error('Failed to load profile:', error);
+      console.error('[Profile] Failed to load profile:', error);
     } finally {
       setIsLoading(false);
     }
@@ -81,9 +81,22 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     setDateFormat('DD/MM/YYYY');
   }, []);
 
-  return (
-    <ProfileContext.Provider value={{ name, profilePhoto, currency, dateFormat, isLoading, loadProfile, updateName, updatePhoto, updateCurrency, updateDateFormat, clearProfile }}>
-      {children}
-    </ProfileContext.Provider>
+  const value = useMemo(
+    () => ({
+      name,
+      profilePhoto,
+      currency,
+      dateFormat,
+      isLoading,
+      loadProfile,
+      updateName,
+      updatePhoto,
+      updateCurrency,
+      updateDateFormat,
+      clearProfile,
+    }),
+    [name, profilePhoto, currency, dateFormat, isLoading, loadProfile, updateName, updatePhoto, updateCurrency, updateDateFormat, clearProfile],
   );
+
+  return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }

@@ -59,10 +59,10 @@ export class GoalService {
     return mapGoal(data.goal);
   }
 
-  static async contribute(id: string, amount: number): Promise<Goal> {
+  static async contribute(id: string, amount: number, currency?: string): Promise<Goal> {
     const data = await apiFetch<{ goal: any }>(`/api/goals/${id}/contribute`, {
       method: 'POST',
-      body: JSON.stringify({ amount }),
+      body: JSON.stringify({ amount, currency }),
     });
     return mapGoal(data.goal);
   }

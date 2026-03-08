@@ -1,7 +1,7 @@
-import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { View, StyleSheet, Pressable, Image, ScrollView, Dimensions } from 'react-native';
-import Svg, { Circle, Polyline, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Polyline } from 'react-native-svg';
 import AppText from '../../components/AppText';
 import Card from '../../components/Card';
 import { spacing, radius } from '../../theme/colors';
@@ -22,8 +22,18 @@ import { GoalService, Goal } from '../../services/GoalService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// ── Tiny sparkline component ──────────────────────────────────
-function MiniSparkline({ data, color, width = 80, height = 36 }: { data: number[]; color: string; width?: number; height?: number }) {
+// ── Tiny sparkline ─────────────────────────────────────────────
+function MiniSparkline({
+  data,
+  color,
+  width = 80,
+  height = 36,
+}: {
+  data: number[];
+  color: string;
+  width?: number;
+  height?: number;
+}) {
   if (data.length < 2) return null;
   const max = Math.max(...data);
   const min = Math.min(...data);
@@ -50,7 +60,7 @@ function MiniSparkline({ data, color, width = 80, height = 36 }: { data: number[
   );
 }
 
-// ── Circular progress ring ──────────────────────────────────
+// ── Circular progress ring ──────────────────────────────────────
 function CircularProgress({
   percentage,
   size = 70,
@@ -73,16 +83,7 @@ function CircularProgress({
 
   return (
     <Svg width={size} height={size}>
-      {/* Track */}
-      <Circle
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill="none"
-        stroke={trackColor}
-        strokeWidth={strokeWidth}
-      />
-      {/* Progress */}
+      <Circle cx={cx} cy={cy} r={r} fill="none" stroke={trackColor} strokeWidth={strokeWidth} />
       <Circle
         cx={cx}
         cy={cy}
@@ -100,185 +101,188 @@ function CircularProgress({
   );
 }
 
-// ── Category color helper ─────────────────────────────────
-const CATEGORY_COLORS: Record<string, string> = {
-  Food: '#FF6B6B',
-  Transport: '#6C5CE7',
-  Bills: '#00D9FF',
-  Shopping: '#FFAA00',
-  Health: '#2ED573',
-  Entertainment: '#FF9FF3',
-  Education: '#54A0FF',
-  Income: '#2ED573',
-  Other: '#A29BFE',
-  Groceries: '#FF9F43',
-  Rent: '#EE5A24',
-  Salary: '#2ED573',
-};
+// ── "Due in X days" helper ─────────────────────────────────────
+function getDueLabel(nextRunISO: string): { label: string; isOverdue: boolean; isToday: boolean } {
+  const now = new Date();
+  const due = new Date(nextRunISO);
+  // Compare calendar days only
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dueMidnight = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const diffMs = dueMidnight.getTime() - todayMidnight.getTime();
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
-function getCategoryColor(category: string): string {
-  return getCategoryMeta(category).color;
+  if (diffDays < 0) return { label: `Overdue by ${Math.abs(diffDays)}d`, isOverdue: true, isToday: false };
+  if (diffDays === 0) return { label: 'Due today', isOverdue: false, isToday: true };
+  if (diffDays === 1) return { label: 'Due tomorrow', isOverdue: false, isToday: false };
+  if (diffDays <= 7) return { label: `Due in ${diffDays} days`, isOverdue: false, isToday: false };
+  return {
+    label: `Due ${due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+    isOverdue: false,
+    isToday: false,
+  };
 }
 
+// ─────────────────────────────────────────────────────────────
 export default function HomeScreen({ navigation }: any) {
   const { items } = useContext(TransactionsContext);
   const { userEmail } = useContext(AuthContext);
   const { name, profilePhoto, currency: preferredCurrency } = useContext(ProfileContext);
   const { colors } = useContext(ThemeContext);
-  const { matchesFilter, year, month, day, filterLabel, hasActiveFilter } = useContext(DateFilterContext);
+  const { matchesFilter, year, month, filterLabel } = useContext(DateFilterContext);
   const { openSidebar } = useContext(SidebarContext);
 
-  const [allBudgets, setAllBudgets] = useState<BudgetStatus[]>([]);
+  // ── Remote data ──
+  const [budgets, setBudgets] = useState<BudgetStatus[]>([]);
   const [rates, setRates] = useState<Record<string, number>>({});
   const [upcomingBills, setUpcomingBills] = useState<RecurringRule[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
 
-  // Fetch exchange rates for conversion
+  // Track last-fetched filter so we only re-fetch when the date filter changes,
+  // NOT every time a transaction is added (fixes the race-condition / N-fetch bug).
+  const lastFetchKey = useRef<string>('');
+
+  // ── Exchange rates (once per preferred currency) ──
   useEffect(() => {
     (async () => {
       try {
         const r = await ExchangeRateService.getRates(preferredCurrency);
         setRates(r && typeof r === 'object' ? r : {});
-      } catch { /* fallback: no conversion */ }
+      } catch { /* fallback */ }
     })();
   }, [preferredCurrency]);
 
-  // Apply global date filter
+  // ── Remote fetch: budgets / recurring / goals ──
+  const fetchRemote = useCallback(async () => {
+    const fetchKey = `${year ?? 'all'}-${month ?? 'all'}`;
+    if (lastFetchKey.current === fetchKey) return; // nothing changed
+    lastFetchKey.current = fetchKey;
+
+    // FIX: Budget always uses current month — never a year/day range.
+    // Passing year+month or null+null (current month default) keeps it meaningful.
+    const budgetYear = year ?? undefined;
+    const budgetMonth = month ?? undefined;
+
+    try {
+      const statuses = await BudgetService.getStatus(
+        budgetMonth ? budgetYear : undefined,
+        budgetMonth ?? undefined,
+        undefined, // never pass a day to budget — daily vs monthly comparison is meaningless
+      );
+      setBudgets(statuses);
+    } catch { /* keep previous */ }
+
+    try {
+      const rules = await RecurringService.list();
+      // Show ALL active recurring rules (both income + expense), sorted by next_run,
+      // capped at 4 entries. Date filter does not apply — recurring is always forward-looking.
+      const active = rules
+        .filter(r => r.is_active)
+        .sort((a, b) => new Date(a.next_run).getTime() - new Date(b.next_run).getTime())
+        .slice(0, 4);
+      setUpcomingBills(active);
+    } catch { /* keep previous */ }
+
+    try {
+      const allGoals = await GoalService.list();
+      // FIX: Show all incomplete goals regardless of date filter.
+      // A goal created in 2023 is still active in 2025 — never hide it by filter.
+      setGoals(allGoals.filter(g => !g.is_completed));
+    } catch { /* keep previous */ }
+  }, [year, month]);
+
+  // Re-fetch only when screen focused AND filter actually changed
+  useFocusEffect(useCallback(() => {
+    lastFetchKey.current = ''; // force refresh on focus
+    fetchRemote();
+  }, [fetchRemote]));
+
+  // ── Derived: filter transactions ──
   const filteredItems = useMemo(
     () => items.filter(t => matchesFilter(t.dateISO)),
     [items, matchesFilter],
   );
 
-  // Convert helper: convert amount from txCurrency to preferredCurrency
-  const convertAmount = (amount: number, txCurrency: string) => {
+  // ── Currency conversion helper (uses cached rates) ──
+  const convertAmount = useCallback((amount: number, txCurrency: string): number => {
     if (!txCurrency || txCurrency === preferredCurrency) return amount;
     if (!rates || Object.keys(rates).length === 0) return amount;
     const rateToTx = rates[txCurrency.toUpperCase()];
     if (!rateToTx || rateToTx === 0) return amount;
     return Math.round((amount / rateToTx) * 100) / 100;
-  };
+  }, [rates, preferredCurrency]);
 
+  // ── Stats ──
   const stats = useMemo(() => {
     let income = 0;
     let expense = 0;
     filteredItems.forEach(t => {
-      const converted = convertAmount(t.amount, t.currency || 'LKR');
-      if (converted > 0) income += converted;
-      else expense += Math.abs(converted);
+      const c = convertAmount(t.amount, t.currency || 'LKR');
+      if (c > 0) income += c;
+      else expense += Math.abs(c);
     });
-    const balance = income - expense;
     return {
       income: Math.round(income * 100) / 100,
       expense: Math.round(expense * 100) / 100,
-      balance: Math.round(balance * 100) / 100,
+      balance: Math.round((income - expense) * 100) / 100,
     };
-  }, [filteredItems, rates, preferredCurrency]);
+  }, [filteredItems, convertAmount]);
 
-  // Build sparkline data from last 7 days of balances
+  // ── Sparkline (running balance, last 10 points) ──
   const sparklineData = useMemo(() => {
     if (filteredItems.length === 0) return [0, 0];
     const sorted = [...filteredItems].sort(
       (a, b) => new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime(),
     );
     let running = 0;
-    const points: number[] = [];
-    sorted.forEach((t) => {
-      running += t.amount;
-      points.push(running);
-    });
-    // Take last 8 points or all if fewer
-    return points.length > 8 ? points.slice(-8) : points;
+    const points: number[] = sorted.map(t => { running += t.amount; return running; });
+    return points.length > 10 ? points.slice(-10) : points;
   }, [filteredItems]);
 
-  const recent = useMemo(() => {
-    // Ensure "Recent" is actually the newest by date, regardless of API ordering
-    return [...filteredItems]
-      .sort((a, b) => new Date(b.dateISO).getTime() - new Date(a.dateISO).getTime())
-      .slice(0, 5);
-  }, [filteredItems]);
-
-  const topCategory = useMemo(() => {
-    const expenses = filteredItems.filter(t => t.amount < 0);
-    const categoryTotals: Record<string, number> = {};
-    expenses.forEach(t => {
-      const cat = t.category || 'Other';
-      const converted = convertAmount(Math.abs(t.amount), t.currency || preferredCurrency);
-      categoryTotals[cat] = (categoryTotals[cat] || 0) + converted;
-    });
-
-    const sorted = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
-    if (sorted.length > 0) {
-      return { category: sorted[0][0], amount: sorted[0][1] };
-    }
-    return null;
-  }, [filteredItems, preferredCurrency, convertAmount]);
-
-  const isActiveInFilter = useCallback((createdAt: string, deadline?: string | null) => {
-    if (!year) return true; // All time
-
-    const created = new Date(createdAt);
-    let filterStart: Date;
-    let filterEnd: Date;
-
-    if (day && month) {
-      filterStart = new Date(year, month - 1, day, 0, 0, 0);
-      filterEnd = new Date(year, month - 1, day, 23, 59, 59);
-    } else if (month) {
-      filterStart = new Date(year, month - 1, 1, 0, 0, 0);
-      filterEnd = new Date(year, month, 0, 23, 59, 59); // 0th day gets the last day of the previous month
-    } else {
-      filterStart = new Date(year, 0, 1, 0, 0, 0);
-      filterEnd = new Date(year, 11, 31, 23, 59, 59);
-    }
-
-    // Hide if created AFTER the filter period ends
-    if (created > filterEnd) return false;
-
-    // Hide if deadline has passed BEFORE the filter period starts
-    if (deadline) {
-      const dbDeadline = new Date(deadline);
-      if (dbDeadline < filterStart) return false;
-    }
-
-    return true;
-  }, [year, month, day]);
-
-  useFocusEffect(
-    useCallback(() => {
-      (async () => {
-        try {
-          const statuses = await BudgetService.getStatus(year, month, day);
-          setAllBudgets(statuses.filter(b => isActiveInFilter(b.created_at)));
-        } catch {}
-
-        try {
-          const rules = await RecurringService.list();
-          const activeBills = rules
-            .filter(r => r.is_active && r.amount < 0)
-            .sort((a, b) => new Date(a.next_run).getTime() - new Date(b.next_run).getTime())
-            .slice(0, 3);
-          setUpcomingBills(activeBills);
-        } catch {}
-
-        try {
-          const goalsList = await GoalService.list();
-          setGoals(goalsList.filter(g => !g.is_completed && isActiveInFilter(g.created_at, g.deadline)));
-        } catch {}
-      })();
-    }, [filteredItems, year, month, day, isActiveInFilter])
+  // ── Recent 5 transactions ──
+  const recent = useMemo(
+    () =>
+      [...filteredItems]
+        .sort((a, b) => new Date(b.dateISO).getTime() - new Date(a.dateISO).getTime())
+        .slice(0, 5),
+    [filteredItems],
   );
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return { text: 'Good Morning', emoji: '☀️' };
-    if (hour < 18) return { text: 'Good Afternoon', emoji: '🌤️' };
-    return { text: 'Good Evening', emoji: '🌙' };
-  };
-  const { text: greetingText, emoji: greetingEmoji } = getGreeting();
+  // ── Top spending category (with amount) ──
+  const topCategory = useMemo(() => {
+    const totals: Record<string, number> = {};
+    filteredItems
+      .filter(t => t.amount < 0)
+      .forEach(t => {
+        const cat = t.category || 'Other';
+        totals[cat] = (totals[cat] || 0) + convertAmount(Math.abs(t.amount), t.currency || preferredCurrency);
+      });
+    const sorted = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+    return sorted.length > 0 ? { category: sorted[0][0], amount: sorted[0][1] } : null;
+  }, [filteredItems, preferredCurrency, convertAmount]);
 
+  // ── Greeting ──
+  const { greetingText, greetingEmoji } = useMemo(() => {
+    const h = new Date().getHours();
+    if (h < 12) return { greetingText: 'Good Morning', greetingEmoji: '☀️' };
+    if (h < 18) return { greetingText: 'Good Afternoon', greetingEmoji: '🌤️' };
+    return { greetingText: 'Good Evening', greetingEmoji: '🌙' };
+  }, []);
+
+  // ── Budget label: always shows which month it represents ──
+  const budgetPeriodLabel = useMemo(() => {
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    if (year && month) return `${MONTHS[month - 1]} ${year}`;
+    const now = new Date();
+    return `${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
+  }, [year, month]);
+
+  // ─────────────────────────────────────────────────────────────────
   return (
-    <ScrollView style={[styles.wrap, { backgroundColor: colors.bg }]} showsVerticalScrollIndicator={false}>
-      {/* ─── Profile Header ─── */}
+    <ScrollView
+      style={[styles.wrap, { backgroundColor: colors.bg }]}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* ── Profile Header ── */}
       <View style={[styles.profileHeader, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Pressable onPress={openSidebar} style={{ marginRight: 12, padding: 4 }}>
           <Icon name="menu" size={24} color={colors.text} />
@@ -287,16 +291,18 @@ export default function HomeScreen({ navigation }: any) {
           <Image source={{ uri: profilePhoto }} style={styles.profileImage} />
         ) : (
           <View style={[styles.profilePlaceholder, { backgroundColor: colors.accent }]}>
-            <AppText style={styles.profileInitial}>{name.charAt(0).toUpperCase() || 'U'}</AppText>
+            <AppText style={styles.profileInitial}>{(name || userEmail || 'U').charAt(0).toUpperCase()}</AppText>
           </View>
         )}
         <View style={styles.profileInfo}>
-          <AppText style={[styles.greeting, { color: colors.text }]}>{greetingText} {greetingEmoji}</AppText>
+          <AppText style={[styles.greeting, { color: colors.text }]}>
+            {greetingText} {greetingEmoji}
+          </AppText>
           <AppText style={[styles.email, { color: colors.muted }]}>{name || userEmail}</AppText>
         </View>
       </View>
 
-      {/* ─── Balance Card with Sparkline ─── */}
+      {/* ── Balance Card ── */}
       <View style={[styles.balanceCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.balanceTop}>
           <View>
@@ -311,11 +317,16 @@ export default function HomeScreen({ navigation }: any) {
             </AppText>
           </View>
           <View style={styles.sparklineWrap}>
-            <MiniSparkline data={sparklineData} color={stats.balance >= 0 ? colors.success : colors.danger} width={90} height={40} />
+            <MiniSparkline
+              data={sparklineData}
+              color={stats.balance >= 0 ? colors.success : colors.danger}
+              width={90}
+              height={40}
+            />
           </View>
         </View>
 
-        {/* Income / Expense Pills */}
+        {/* Income / Expense pills */}
         <View style={styles.pillRow}>
           <View style={[styles.pill, { backgroundColor: 'rgba(46,213,115,0.12)' }]}>
             <View style={[styles.pillDot, { backgroundColor: colors.success }]}>
@@ -336,22 +347,31 @@ export default function HomeScreen({ navigation }: any) {
             </AppText>
           </View>
         </View>
-        
-        {/* Top Spending Category Indicator */}
+
+        {/* FIX: Top category now shows amount too */}
         {topCategory && (
-            <View style={[styles.topCategoryRow, { borderTopColor: colors.border }]}>
-                <AppText muted style={{ fontSize: 12 }}>Top Spending Category: </AppText>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={[styles.miniCatDot, { backgroundColor: getCategoryColor(topCategory.category) }]} />
-                  <AppText style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>{topCategory.category}</AppText>
-                </View>
+          <View style={[styles.topCategoryRow, { borderTopColor: colors.border }]}>
+            <AppText muted style={{ fontSize: 12 }}>Top spending</AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={[styles.miniCatDot, { backgroundColor: getCategoryMeta(topCategory.category).color }]} />
+              <AppText style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>
+                {topCategory.category}
+              </AppText>
+              <AppText style={{ fontSize: 13, fontWeight: '700', color: colors.danger }}>
+                {formatMoney(topCategory.amount, preferredCurrency)}
+              </AppText>
             </View>
+          </View>
         )}
       </View>
 
-      {/* ─── Budget Overview (horizontal scroll with rings) ─── */}
+      {/* ── Budget Overview ── */}
       <View style={styles.sectionRow}>
-        <AppText style={styles.sectionTitle}>Budget Overview</AppText>
+        <View>
+          <AppText style={styles.sectionTitle}>Budget Overview</AppText>
+          {/* FIX: clear label showing which month the budget data represents */}
+          <AppText muted style={{ fontSize: 11, marginTop: 2 }}>{budgetPeriodLabel}</AppText>
+        </View>
         <Pressable onPress={() => navigation.getParent()?.navigate('Budgets')} hitSlop={10}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>Manage</AppText>
@@ -360,58 +380,65 @@ export default function HomeScreen({ navigation }: any) {
         </Pressable>
       </View>
 
-      {allBudgets.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.budgetScroll}
-        >
-          {allBudgets.map((b) => {
+      {budgets.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+          {budgets.map(b => {
             const isOver = b.percentage >= 100;
             const isWarning = b.percentage >= 80;
             const ringColor = isOver ? colors.danger : isWarning ? colors.warning : colors.success;
-            const clampedPct = Math.min(b.percentage, 100);
+            const catMeta = getCategoryMeta(b.category);
 
             return (
               <View
                 key={b.id}
-                style={[styles.budgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                style={[styles.hCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
               >
-                <View style={styles.budgetCardHeader}>
-                  <AppText style={{ fontWeight: '600', fontSize: 14, flex: 1 }} numberOfLines={1}>
+                <View style={styles.hCardHeader}>
+                  <View style={[styles.miniIconWrap, { backgroundColor: catMeta.color + '20' }]}>
+                    <Icon name={catMeta.icon} size={14} color={catMeta.color} />
+                  </View>
+                  <AppText style={{ fontWeight: '600', fontSize: 13, flex: 1, marginLeft: 8 }} numberOfLines={1}>
                     {b.category}
                   </AppText>
-                  {isOver && <Icon name="alert-triangle" size={16} color={colors.warning} />}
+                  {isOver && <Icon name="alert-triangle" size={14} color={colors.danger} />}
                 </View>
-                <View style={styles.budgetRingRow}>
+                <View style={styles.ringRow}>
                   <CircularProgress
-                    percentage={clampedPct}
-                    size={64}
+                    percentage={Math.min(b.percentage, 100)}
+                    size={56}
                     strokeWidth={6}
                     trackColor={colors.surface2}
                     progressColor={ringColor}
                   />
-                  <View style={styles.budgetStats}>
-                    <AppText style={{ fontWeight: '800', fontSize: 16, color: ringColor }}>
+                  <View style={{ marginLeft: 10 }}>
+                    <AppText style={{ fontWeight: '800', fontSize: 18, color: ringColor }}>
                       {b.percentage}%
                     </AppText>
-                    <AppText muted style={{ fontSize: 10, marginTop: 2 }}>
-                      {isOver ? 'Overspend' : 'Used'}
+                    <AppText muted style={{ fontSize: 10, marginTop: 1 }}>
+                      {isOver ? 'Overspent' : 'Used'}
                     </AppText>
                   </View>
                 </View>
-                <AppText muted style={{ fontSize: 10, marginTop: 8 }}>
-                  {formatMoney(b.spent, preferredCurrency)} / {formatMoney(b.amount, preferredCurrency)} limit
+                <AppText muted style={{ fontSize: 10, marginTop: 10 }}>
+                  {formatMoney(b.spent, b.currency)} / {formatMoney(b.amount, b.currency)}
                 </AppText>
+                {b.conversion_error && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+                    <Icon name="alert-triangle" size={11} color={colors.warning} />
+                    <AppText style={{ fontSize: 10, color: colors.warning, fontWeight: '600' }}>
+                      Multi-currency — partial data
+                    </AppText>
+                  </View>
+                )}
               </View>
             );
           })}
         </ScrollView>
       ) : (
         <Pressable onPress={() => navigation.getParent()?.navigate('Budgets')}>
-          <View style={[styles.emptyBudgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Icon name="wallet" size={28} color={colors.accent} />
-            <AppText style={{ fontWeight: '600', fontSize: 14 }}>No budgets set yet</AppText>
+          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Icon name="wallet" size={26} color={colors.accent} />
+            <AppText style={{ fontWeight: '600', fontSize: 14, marginTop: 8 }}>No budgets set</AppText>
             <AppText muted style={{ fontSize: 12, marginTop: 4, textAlign: 'center' }}>
               Set monthly limits per category to track spending
             </AppText>
@@ -422,7 +449,7 @@ export default function HomeScreen({ navigation }: any) {
         </Pressable>
       )}
 
-      {/* ─── Savings Goals Overview ─── */}
+      {/* ── Savings Goals ── */}
       <View style={styles.sectionRow}>
         <AppText style={styles.sectionTitle}>Savings Goals</AppText>
         <Pressable onPress={() => navigation.getParent()?.navigate('Goals')} hitSlop={10}>
@@ -434,49 +461,62 @@ export default function HomeScreen({ navigation }: any) {
       </View>
 
       {goals.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.budgetScroll}
-        >
-          {goals.map((g) => {
-            const clampedPct = Math.min(g.progress_percentage || 0, 100);
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+          {goals.map(g => {
+            const pct = Math.min(g.progress_percentage || 0, 100);
+            const isDone = pct >= 100;
+
+            // Deadline urgency
+            let deadlineLabel = '';
+            let deadlineColor = colors.muted;
+            if (g.deadline) {
+              const { label, isOverdue, isToday } = getDueLabel(g.deadline);
+              deadlineLabel = label;
+              deadlineColor = isOverdue ? colors.danger : isToday ? colors.warning : colors.muted;
+            }
+
             return (
               <View
                 key={g.id}
-                style={[styles.budgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                style={[styles.hCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
               >
-                <View style={styles.budgetCardHeader}>
-                  <AppText style={{ fontWeight: '600', fontSize: 14, flex: 1 }} numberOfLines={1}>
+                <View style={styles.hCardHeader}>
+                  <AppText style={{ fontWeight: '600', fontSize: 13, flex: 1 }} numberOfLines={1}>
                     {g.name}
                   </AppText>
-                  {clampedPct >= 100 && <Icon name="party-popper" size={16} color={colors.success} />}
+                  {isDone && <Icon name="party-popper" size={14} color={colors.success} />}
                 </View>
-                <View style={styles.budgetRingRow}>
+                <View style={styles.ringRow}>
                   <CircularProgress
-                    percentage={clampedPct}
-                    size={64}
+                    percentage={pct}
+                    size={56}
                     strokeWidth={6}
                     trackColor={colors.surface2}
-                    progressColor={colors.success}
+                    progressColor={isDone ? colors.success : colors.accent}
                   />
-                  <View style={styles.budgetStats}>
-                    <AppText style={{ fontWeight: '800', fontSize: 16, color: colors.success }}>
-                      {Math.round(clampedPct)}%
+                  <View style={{ marginLeft: 10 }}>
+                    <AppText style={{ fontWeight: '800', fontSize: 18, color: isDone ? colors.success : colors.accent }}>
+                      {Math.round(pct)}%
                     </AppText>
+                    <AppText muted style={{ fontSize: 10, marginTop: 1 }}>Saved</AppText>
                   </View>
                 </View>
-                <AppText muted style={{ fontSize: 10, marginTop: 8 }}>
+                <AppText muted style={{ fontSize: 10, marginTop: 10 }}>
                   {formatMoney(g.current_amount, g.currency)} / {formatMoney(g.target_amount, g.currency)}
                 </AppText>
+                {deadlineLabel ? (
+                  <AppText style={{ fontSize: 10, marginTop: 4, fontWeight: '600', color: deadlineColor }}>
+                    {deadlineLabel}
+                  </AppText>
+                ) : null}
               </View>
             );
           })}
         </ScrollView>
       ) : (
         <Pressable onPress={() => navigation.getParent()?.navigate('Goals')}>
-          <View style={[styles.emptyBudgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Icon name="target" size={28} color={colors.accent} />
+          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Icon name="target" size={26} color={colors.accent} />
             <AppText style={{ fontWeight: '600', fontSize: 14, marginTop: 8 }}>No active goals</AppText>
             <AppText muted style={{ fontSize: 12, marginTop: 4, textAlign: 'center' }}>
               Create a savings goal to track your progress
@@ -488,41 +528,84 @@ export default function HomeScreen({ navigation }: any) {
         </Pressable>
       )}
 
-      {/* ─── Upcoming Bills / Subscriptions ─── */}
-      {upcomingBills.length > 0 && (
-        <>
-            <View style={styles.sectionRow}>
-            <AppText style={styles.sectionTitle}>Upcoming Bills</AppText>
-            <Pressable onPress={() => navigation.getParent()?.navigate('Recurring')} hitSlop={10}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>Manage</AppText>
-                <Icon name="chevron-right" size={14} color={colors.accent} />
+      {/* ── Upcoming / Recurring ── */}
+      <View style={styles.sectionRow}>
+        <View>
+          <AppText style={styles.sectionTitle}>Recurring</AppText>
+          <AppText muted style={{ fontSize: 11, marginTop: 2 }}>Upcoming scheduled entries</AppText>
+        </View>
+        <Pressable onPress={() => navigation.getParent()?.navigate('Recurring')} hitSlop={10}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13 }}>Manage</AppText>
+            <Icon name="chevron-right" size={14} color={colors.accent} />
+          </View>
+        </Pressable>
+      </View>
+
+      {upcomingBills.length > 0 ? (
+        <View style={[styles.listCard, { backgroundColor: colors.surface }]}>
+          {upcomingBills.map((bill, idx) => {
+            const isIncome = bill.amount >= 0;
+            const { label: dueLabel, isOverdue, isToday } = getDueLabel(bill.next_run);
+            const dueColor = isOverdue ? colors.danger : isToday ? colors.warning : colors.muted;
+            const catMeta = getCategoryMeta(bill.category);
+            const freqLabel: Record<string, string> = {
+              daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly',
+            };
+            const isLast = idx === upcomingBills.length - 1;
+
+            return (
+              <View
+                key={bill.id}
+                style={[styles.listRow, !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}
+              >
+                <View style={[styles.listIcon, { backgroundColor: catMeta.color + '20' }]}>
+                  <Icon name={catMeta.icon} size={16} color={catMeta.color} />
                 </View>
-            </Pressable>
-            </View>
-            <View style={[styles.billsContainer, { backgroundColor: colors.surface }]}>
-               {upcomingBills.map(bill => {
-                   const due = new Date(bill.next_run).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                   return (
-                     <View key={bill.id} style={[styles.billRow, { borderBottomColor: colors.border }]}>
-                        <View style={[styles.billIcon, { backgroundColor: getCategoryColor(bill.category) + '20' }]}>
-                            <Icon name={getCategoryMeta(bill.category).icon} size={16} color={getCategoryColor(bill.category)} />
-                        </View>
-                        <View style={{ flex: 1, paddingLeft: 12 }}>
-                            <AppText style={{ fontWeight: '600', fontSize: 14, color: colors.text }}>{bill.title}</AppText>
-                            <AppText muted style={{ fontSize: 12, marginTop: 2 }}>Due {due}</AppText>
-                        </View>
-                        <AppText mono style={{ fontWeight: '700', fontSize: 14, color: colors.danger }}>
-                            {formatMoney(Math.abs(bill.amount), bill.currency || preferredCurrency)}
-                        </AppText>
-                     </View>
-                   )
-               })}
-            </View>
-        </>
+                <View style={{ flex: 1, paddingLeft: 12 }}>
+                  <AppText style={{ fontWeight: '600', fontSize: 14, color: colors.text }}>
+                    {bill.title}
+                  </AppText>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                    <AppText style={{ fontSize: 11, fontWeight: '600', color: dueColor }}>
+                      {dueLabel}
+                    </AppText>
+                    <AppText muted style={{ fontSize: 11 }}>
+                      · {freqLabel[bill.frequency] ?? bill.frequency}
+                    </AppText>
+                  </View>
+                </View>
+                <AppText
+                  mono
+                  style={{
+                    fontWeight: '700',
+                    fontSize: 14,
+                    color: isIncome ? colors.success : colors.danger,
+                  }}
+                >
+                  {isIncome ? '+' : '-'}{formatMoney(Math.abs(bill.amount), bill.currency || preferredCurrency)}
+                </AppText>
+              </View>
+            );
+          })}
+        </View>
+      ) : (
+        /* FIX: empty state with CTA — was missing before */
+        <Pressable onPress={() => navigation.getParent()?.navigate('Recurring')}>
+          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Icon name="repeat" size={26} color={colors.accent} />
+            <AppText style={{ fontWeight: '600', fontSize: 14, marginTop: 8 }}>No recurring entries</AppText>
+            <AppText muted style={{ fontSize: 12, marginTop: 4, textAlign: 'center' }}>
+              Set up recurring bills, subscriptions, or salary to automate tracking
+            </AppText>
+            <AppText style={{ color: colors.accent, fontWeight: '600', fontSize: 13, marginTop: 10 }}>
+              + Add Recurring
+            </AppText>
+          </View>
+        </Pressable>
       )}
 
-      {/* ─── Recent Transactions ─── */}
+      {/* ── Recent Transactions ── */}
       <View style={styles.sectionRow}>
         <AppText style={styles.sectionTitle}>Recent Transactions</AppText>
         <Pressable onPress={() => navigation.navigate('Transactions')} hitSlop={10}>
@@ -534,20 +617,19 @@ export default function HomeScreen({ navigation }: any) {
       </View>
 
       {recent.length > 0 ? (
-        recent.map((item) => {
+        recent.map(item => {
           const isIncome = item.amount > 0;
-          const catColor = getCategoryColor(item.category);
+          const catMeta = getCategoryMeta(item.category);
           const dateObj = new Date(item.dateISO);
-          const timeStr = dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-          const isToday =
-            new Date().toDateString() === dateObj.toDateString();
-          const isYesterday =
-            new Date(Date.now() - 86400000).toDateString() === dateObj.toDateString();
+          const now = new Date();
+          const isToday = now.toDateString() === dateObj.toDateString();
+          const isYesterday = new Date(Date.now() - 86400000).toDateString() === dateObj.toDateString();
           const dayLabel = isToday
             ? 'Today'
             : isYesterday
             ? 'Yesterday'
             : dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          const timeStr = dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
           return (
             <Pressable
@@ -559,36 +641,17 @@ export default function HomeScreen({ navigation }: any) {
                 pressed && { opacity: 0.7 },
               ]}
             >
-              {/* Category icon circle */}
-              <View style={[styles.txIcon, { backgroundColor: catColor + '20' }]}>
-                <Icon
-                  name={getCategoryMeta(item.category).icon}
-                  size={18}
-                  color={catColor}
-                />
+              <View style={[styles.txIcon, { backgroundColor: catMeta.color + '20' }]}>
+                <Icon name={catMeta.icon} size={18} color={catMeta.color} />
               </View>
-
-              {/* Title + Category + Date */}
               <View style={styles.txInfo}>
-                <AppText style={{ fontWeight: '600', fontSize: 15, color: colors.text }}>
-                  {item.title}
-                </AppText>
-                <AppText muted style={{ fontSize: 12, marginTop: 2 }}>
-                  {item.category}
-                </AppText>
-                <AppText muted style={{ fontSize: 11, marginTop: 1 }}>
-                  {dayLabel}, {timeStr}
-                </AppText>
+                <AppText style={{ fontWeight: '600', fontSize: 15, color: colors.text }}>{item.title}</AppText>
+                <AppText muted style={{ fontSize: 12, marginTop: 2 }}>{item.category}</AppText>
+                <AppText muted style={{ fontSize: 11, marginTop: 1 }}>{dayLabel}, {timeStr}</AppText>
               </View>
-
-              {/* Amount */}
               <AppText
                 mono
-                style={{
-                  fontWeight: '700',
-                  fontSize: 15,
-                  color: isIncome ? colors.success : colors.text,
-                }}
+                style={{ fontWeight: '700', fontSize: 15, color: isIncome ? colors.success : colors.text }}
               >
                 {formatMoney(item.amount, item.currency || preferredCurrency)}
               </AppText>
@@ -596,13 +659,13 @@ export default function HomeScreen({ navigation }: any) {
           );
         })
       ) : (
-        <View style={[styles.emptyStateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.emptyTxCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={[styles.emptyIconWrap, { backgroundColor: colors.accent + '20' }]}>
             <Icon name="file-text" size={32} color={colors.accent} />
           </View>
           <AppText style={{ fontWeight: '700', fontSize: 16, marginTop: 12 }}>No transactions yet</AppText>
           <AppText muted style={{ fontSize: 13, marginTop: 4, textAlign: 'center', lineHeight: 20 }}>
-             Start tracking your expenses and income to see your balance here.
+            Start tracking your expenses and income to see your balance here.
           </AppText>
           <Pressable
             onPress={() => navigation.getParent()?.navigate('AddTx')}
@@ -619,247 +682,88 @@ export default function HomeScreen({ navigation }: any) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  wrap: {
-    flex: 1,
-    padding: spacing.lg,
-    paddingTop: scaleHeight(55),
-  },
+  wrap: { flex: 1, padding: spacing.lg, paddingTop: scaleHeight(55) },
 
-  // ── Profile Header ──
+  // Header
   profileHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row', alignItems: 'center',
+    padding: 14, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth,
   },
-  profileImage: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-  },
-  profilePlaceholder: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileInitial: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  profileInfo: {
-    marginLeft: 14,
-    flex: 1,
-  },
-  greeting: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  email: {
-    fontSize: 12,
-    marginTop: 2,
-  },
+  profileImage: { width: 46, height: 46, borderRadius: 23 },
+  profilePlaceholder: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  profileInitial: { fontSize: 18, fontWeight: '700', color: '#FFF' },
+  profileInfo: { marginLeft: 14, flex: 1 },
+  greeting: { fontSize: 18, fontWeight: '700' },
+  email: { fontSize: 12, marginTop: 2 },
 
-  // ── Balance Card ──
+  // Balance
   balanceCard: {
-    marginTop: 18,
-    padding: 20,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    marginTop: 18, padding: 20,
+    borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth,
   },
-  balanceTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
+  balanceTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   balanceAmount: {
-    fontSize: 32,
-    fontWeight: '800',
-    marginTop: 8,
-    paddingVertical:3,
-    letterSpacing: -0.5,
-    fontVariant: ['tabular-nums'] as any,
+    fontSize: 32, fontWeight: '800', marginTop: 8, paddingVertical: 3,
+    letterSpacing: -0.5, fontVariant: ['tabular-nums'] as any,
   },
-  sparklineWrap: {
-    marginTop: 8,
-    opacity: 0.9,
-  },
-  filterBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-
-  // ── Top Category Indicator ──
+  sparklineWrap: { marginTop: 8, opacity: 0.9 },
+  filterBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
   topCategoryRow: {
-    marginTop: 18,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    marginTop: 18, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
-  miniCatDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  miniCatDot: { width: 10, height: 10, borderRadius: 5 },
+  pillRow: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  pill: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 12, borderRadius: radius.md, flexWrap: 'wrap' },
+  pillDot: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  pillAmount: { fontWeight: '700', fontSize: 14, marginTop: 4, width: '100%', paddingLeft: 28 },
+
+  // Sections
+  sectionRow: { marginTop: 26, marginBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  sectionTitle: { fontWeight: '700', fontSize: 18 },
+
+  // Horizontal scroll cards
+  hScroll: { paddingRight: 20, gap: 12 },
+  hCard: {
+    width: (SCREEN_WIDTH - 56) / 2, padding: 14,
+    borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth,
+  },
+  hCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  miniIconWrap: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  ringRow: { flexDirection: 'row', alignItems: 'center' },
+
+  // Empty cards
+  emptyCard: {
+    alignItems: 'center', paddingVertical: 22, paddingHorizontal: 16,
+    borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth,
   },
 
-  // ── Income / Expense Pills ──
-  pillRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 18,
-  },
-  pill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: radius.md,
-    flexWrap: 'wrap',
-  },
-  pillDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pillAmount: {
-    fontWeight: '700',
-    fontSize: 14,
-    marginTop: 4,
-    width: '100%',
-    paddingLeft: 28,
-  },
+  // Recurring list
+  listCard: { borderRadius: radius.lg, paddingHorizontal: 16 },
+  listRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
+  listIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
 
-  // ── Section Headers ──
-  sectionRow: {
-    marginTop: 26,
-    marginBottom: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    fontWeight: '700',
-    fontSize: 18,
-  },
-
-  // ── Budget Cards ──
-  budgetScroll: {
-    paddingRight: 20,
-    gap: 12,
-  },
-  budgetCard: {
-    width: (SCREEN_WIDTH - 56) / 2,
-    padding: 14,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  budgetCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  budgetRingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  budgetStats: {
-    flex: 1,
-  },
-  emptyBudgetCard: {
-    alignItems: 'center',
-    paddingVertical: 22,
-    paddingHorizontal: 16,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-
-  // ── Recurring Card ──
-  recurringCard: {
-    alignItems: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginTop: 18,
-  },
-  
-  // ── Upcoming Bills ──
-  billsContainer: {
-    borderRadius: radius.lg,
-    paddingHorizontal: 16,
-  },
-  billRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  billIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // ── Transaction Rows ──
+  // Transactions
   txRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: 10,
-    gap: 14,
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 12, paddingHorizontal: 14,
+    borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 10, gap: 14,
   },
-  txIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+  txIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  txInfo: { flex: 1 },
+
+  // Empty tx state
+  emptyTxCard: {
+    alignItems: 'center', paddingVertical: 32, paddingHorizontal: 24,
+    borderRadius: radius.xl, borderWidth: StyleSheet.hairlineWidth, marginTop: 10,
   },
-  txInfo: {
-    flex: 1,
-  },
-  
-  // ── Empty State ──
-  emptyStateCard: {
-    alignItems: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 24,
-    borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginTop: 10,
-  },
-  emptyIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  emptyIconWrap: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
   emptyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: radius.full,
-    marginTop: 24,
-    gap: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 12, paddingHorizontal: 24,
+    borderRadius: radius.full, marginTop: 24, gap: 8,
   },
 });

@@ -44,6 +44,9 @@ import {
   PartyPopper,
   FileText,
   CheckCircle,
+  Bell,
+  ArrowUp,
+  ArrowDown,
   type LucideProps,
 } from 'lucide-react-native';
 
@@ -91,11 +94,14 @@ const iconMap = {
   'file-text': FileText,
   paperclip: Paperclip,
   'check-circle': CheckCircle,
+  bell: Bell,
+  'arrow-up': ArrowUp,
+  'arrow-down': ArrowDown,
 } as const;
 
 export type IconName = keyof typeof iconMap;
 
-type IconSize = 12 | 14 | 16 | 18 | 20 | 24 | 28 | 32 | 48;
+type IconSize = 10 | 12 | 14 | 16 | 18 | 20 | 24 | 26 | 28 | 32 | 36 | 40 | 48;
 
 type Props = {
   name: IconName;

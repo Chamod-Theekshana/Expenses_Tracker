@@ -2,87 +2,24 @@ import React, { useContext, useEffect, useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
-  ScrollView,
   Alert,
   Modal,
-  Pressable,
-  Animated,
-  Easing,
+  FlatList,
 } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
 import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
 import AppButton from '../../components/AppButton';
 import Card from '../../components/Card';
-import Screen from '../../components/Screen';
 import IconButton from '../../components/IconButton';
 import Icon from '../../components/Icon';
-import Chip from '../../components/Chip';
+import CircularProgress from '../../components/CircularProgress';
 import { ThemeContext } from '../../store/theme';
 import { ProfileContext } from '../../store/profile';
 import { GoalService, Goal } from '../../services/GoalService';
 import { NotificationsContext } from '../../store/notifications';
 import { radius, spacing } from '../../theme/colors';
 import { formatMoney } from '../../utils/money';
-
-// ── Animated circular progress ring ────────────────────────────
-function GoalRing({
-  percentage,
-  size = 80,
-  strokeWidth = 8,
-  color,
-  trackColor,
-  completed,
-}: {
-  percentage: number;
-  size?: number;
-  strokeWidth?: number;
-  color: string;
-  trackColor: string;
-  completed: boolean;
-}) {
-  const r = (size - strokeWidth) / 2;
-  const cx = size / 2;
-  const cy = size / 2;
-  const circumference = 2 * Math.PI * r;
-  const clampedPct = Math.min(percentage, 100);
-  const strokeDashoffset = circumference - (clampedPct / 100) * circumference;
-
-  const shimmer = React.useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (completed) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(shimmer, { toValue: 1, duration: 600, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
-          Animated.timing(shimmer, { toValue: 0, duration: 600, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
-        ]),
-      ).start();
-    }
-  }, [completed]);
-
-  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [1, 0.6] });
-
-  return (
-    <Animated.View style={{ opacity: completed ? opacity : 1 }}>
-      <Svg width={size} height={size}>
-        <Circle cx={cx} cy={cy} r={r} fill="none" stroke={trackColor} strokeWidth={strokeWidth} />
-        <Circle
-          cx={cx}
-          cy={cy}
-          r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${circumference}`}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          rotation="-90"
-          origin={`${cx}, ${cy}`}
-        />
-      </Svg>
-    </Animated.View>
-  );
-}
+import { scaleHeight } from '../../constants/size';
 
 // ── Goal Card ────────────────────────────────────────────────
 function GoalCard({
@@ -90,11 +27,13 @@ function GoalCard({
   onContribute,
   onEdit,
   onDelete,
+  shadowStyle,
 }: {
   goal: Goal;
   onContribute: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  shadowStyle: any;
 }) {
   const { colors } = useContext(ThemeContext);
   const pct = Math.min(goal.progress_percentage, 100);
@@ -104,21 +43,22 @@ function GoalCard({
     : null;
 
   return (
-    <Card style={{ marginBottom: 14 }}>
+    <Card style={[shadowStyle, { marginBottom: 16, backgroundColor: colors.surface }]}>
       <View style={styles.goalRow}>
         <View style={{ position: 'relative' }}>
-          <GoalRing
+          <CircularProgress
             percentage={pct}
-            color={ringColor}
-            trackColor={colors.border}
-            completed={goal.is_completed}
+            size={80}
+            strokeWidth={8}
+            progressColor={ringColor}
+            trackColor={colors.surface2}
           />
           <View style={StyleSheet.absoluteFill} pointerEvents="none">
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
               {goal.is_completed ? (
-                <Icon name="check" size={20} color={colors.success} />
+                <Icon name="check" size={24} color={colors.success} />
               ) : (
-                <AppText style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>
+                <AppText style={{ fontSize: 13, fontWeight: '800', color: colors.text }}>
                   {Math.round(pct)}%
                 </AppText>
               )}
@@ -126,49 +66,36 @@ function GoalCard({
           </View>
         </View>
 
-        <View style={{ flex: 1, marginLeft: 14 }}>
+        <View style={{ flex: 1, marginLeft: 16 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <AppText style={{ fontWeight: '700', fontSize: 15, color: colors.text, flex: 1 }} numberOfLines={1}>
+            <AppText style={{ fontWeight: '700', fontSize: 16, color: colors.text, flex: 1 }} numberOfLines={1}>
               {goal.name}
             </AppText>
             {goal.is_completed && (
               <View style={[styles.badge, { backgroundColor: colors.success + '20' }]}>
-                <AppText style={{ fontSize: 10, color: colors.success, fontWeight: '700' }}>DONE 🎉</AppText>
+                <AppText style={{ fontSize: 10, color: colors.success, fontWeight: '800' }}>DONE 🎉</AppText>
               </View>
             )}
           </View>
 
-          <AppText style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>
+          <AppText style={{ color: colors.muted, fontSize: 13, marginTop: 4 }}>
             {formatMoney(goal.current_amount, goal.currency)} / {formatMoney(goal.target_amount, goal.currency)}
           </AppText>
 
           {daysLeft !== null && !goal.is_completed && (
-            <AppText style={{ color: daysLeft < 7 ? colors.danger : colors.muted, fontSize: 11, marginTop: 2 }}>
+            <AppText style={{ color: daysLeft < 7 ? colors.danger : colors.muted, fontSize: 12, marginTop: 4 }}>
               {daysLeft > 0 ? `${daysLeft}d left` : daysLeft === 0 ? 'Due today' : 'Overdue'}
             </AppText>
           )}
-        </View>
 
-        <View style={{ flexDirection: 'row', gap: 4 }}>
-          {!goal.is_completed && (
-            <IconButton icon="plus" size={18} onPress={onContribute} />
-          )}
-          <IconButton icon="edit" size={18} onPress={onEdit} />
-          <IconButton icon="trash" size={18} onPress={onDelete} />
+          <View style={{ flexDirection: 'row', gap: 6, marginTop: 12 }}>
+            {!goal.is_completed && (
+              <IconButton icon="plus" size={20} iconSize={12} onPress={onContribute} style={{ backgroundColor: colors.surface2 }} />
+            )}
+            <IconButton icon="edit" size={20} iconSize={12} onPress={onEdit} style={{ backgroundColor: colors.surface2 }} />
+            <IconButton icon="trash" size={20} iconSize={12} onPress={onDelete} style={{ backgroundColor: colors.surface2 }} color={colors.danger} />
+          </View>
         </View>
-      </View>
-
-      {/* Progress bar */}
-      <View style={[styles.progressTrack, { backgroundColor: colors.border, marginTop: 12 }]}>
-        <View
-          style={[
-            styles.progressBar,
-            {
-              width: `${pct}%` as any,
-              backgroundColor: goal.is_completed ? colors.success : colors.accent,
-            },
-          ]}
-        />
       </View>
     </Card>
   );
@@ -203,9 +130,8 @@ function GoalFormModal({
   const isValidDate = () => {
     if (!deadline) return true;
     const d = new Date(deadline);
-    if (isNaN(d.getTime())) return false; // invalid format
+    if (isNaN(d.getTime())) return false;
     
-    // Create 'today' at midnight to allow setting a deadline for today
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -241,19 +167,17 @@ function GoalFormModal({
             <AppText style={{ fontWeight: '700', fontSize: 18, color: colors.text }}>
               {initial ? 'Edit Goal' : 'New Goal'}
             </AppText>
-            <IconButton icon="x" onPress={onClose} />
+            <IconButton icon="x" size={24} onPress={onClose} />
           </View>
 
           <AppText muted style={{ fontSize: 13, marginBottom: 8 }}>Goal Name</AppText>
           <AppInput value={name} onChangeText={setName} placeholder="e.g. Vacation, Emergency Fund" />
 
-          <View style={{ height: 14 }} />
+          <View style={{ height: 16 }} />
           <AppText muted style={{ fontSize: 13, marginBottom: 8 }}>Target Amount</AppText>
           <AppInput value={targetRaw} onChangeText={setTargetRaw} keyboardType="decimal-pad" placeholder="e.g. 50000" />
 
-          {/* Currency selection removed to enforce global Profile preference */}
-
-          <View style={{ height: 14 }} />
+          <View style={{ height: 16 }} />
           <AppText muted style={{ fontSize: 13, marginBottom: 8 }}>Deadline (optional, YYYY-MM-DD)</AppText>
           <AppInput 
             value={deadline} 
@@ -262,12 +186,12 @@ function GoalFormModal({
             style={deadline && !isFormatCorrect ? { borderColor: colors.danger } : {}}
           />
           {deadline && !isValidDate() && isFormatCorrect && (
-            <AppText style={{ color: colors.danger, fontSize: 11, marginTop: 4 }}>
+            <AppText style={{ color: colors.danger, fontSize: 12, marginTop: 4 }}>
               Deadline cannot be in the past
             </AppText>
           )}
 
-          <AppButton title={initial ? 'Update Goal' : 'Create Goal'} onPress={handle} disabled={!canSave} loading={saving} style={{ marginTop: 20 }} />
+          <AppButton title={initial ? 'Update Goal' : 'Create Goal'} onPress={handle} disabled={!canSave} loading={saving} style={{ marginTop: 24 }} />
         </View>
       </View>
     </Modal>
@@ -315,16 +239,16 @@ function ContributeModal({
         <View style={[styles.modalSheet, { backgroundColor: colors.surface }]}>
           <View style={styles.modalHeader}>
             <AppText style={{ fontWeight: '700', fontSize: 18, color: colors.text }}>Add Savings</AppText>
-            <IconButton icon="x" onPress={onClose} />
+            <IconButton icon="x" size={24} onPress={onClose} />
           </View>
           {goal && (
-            <AppText muted style={{ fontSize: 13, marginBottom: 14 }}>
+            <AppText muted style={{ fontSize: 14, marginBottom: 16 }}>
               {goal.name} · {formatMoney(goal.target_amount - goal.current_amount, goal.currency)} remaining
             </AppText>
           )}
           <AppText muted style={{ fontSize: 13, marginBottom: 8 }}>Amount ({goal?.currency})</AppText>
           <AppInput value={amountRaw} onChangeText={setAmountRaw} keyboardType="decimal-pad" placeholder="e.g. 1000" />
-          <AppButton title="Add to Goal" onPress={handle} disabled={!canSave} loading={saving} style={{ marginTop: 20 }} />
+          <AppButton title="Add to Goal" onPress={handle} disabled={!canSave} loading={saving} style={{ marginTop: 24 }} />
         </View>
       </View>
     </Modal>
@@ -333,7 +257,7 @@ function ContributeModal({
 
 // ── Main Screen ────────────────────────────────────────────────
 export default function GoalsScreen({ navigation }: any) {
-  const { colors } = useContext(ThemeContext);
+  const { colors, theme } = useContext(ThemeContext);
   const { currency: preferredCurrency } = useContext(ProfileContext);
   const { show } = useContext(NotificationsContext);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -367,7 +291,6 @@ export default function GoalsScreen({ navigation }: any) {
       const created = await GoalService.create(name, target, preferredCurrency || 'LKR', deadline);
       setGoals((prev) => [created, ...prev]);
       
-      // Show local in-app banner on goal creation (similar to transactions)
       show({
         title: 'Goal Created!',
         body: `Your savings goal "${created.name}" has been set up successfully.`,
@@ -376,7 +299,6 @@ export default function GoalsScreen({ navigation }: any) {
   };
 
   const handleContribute = async (id: string, amount: number) => {
-    // Find the goal to get its currency — the ContributeModal labels the input in goal.currency
     const goal = goals.find(g => g.id === id);
     const currency = goal?.currency || preferredCurrency || 'LKR';
     const updated = await GoalService.contribute(id, amount, currency);
@@ -403,89 +325,86 @@ export default function GoalsScreen({ navigation }: any) {
 
   const active = goals.filter((g) => !g.is_completed);
   const completed = goals.filter((g) => g.is_completed);
+  const cardShadow = theme === 'light' ? styles.cardShadowLight : {};
 
   return (
-    <Screen preset="scroll" padded>
+    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
       <View style={styles.header}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Icon name="check-circle" size={24} color={colors.accent} />
-          <AppText title>Savings Goals</AppText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="target" size={20} color={colors.accent} />
+          </View>
+          <AppText title style={{ fontSize: 24 }}>Savings</AppText>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <IconButton icon="plus" onPress={() => { setEditTarget(null); setFormVisible(true); }} accessibilityLabel="Add goal" />
-          <IconButton icon="x" onPress={() => navigation.goBack()} accessibilityLabel="Close" />
+          <IconButton icon="plus" size={36} onPress={() => { setEditTarget(null); setFormVisible(true); }} accessibilityLabel="Add goal" />
+          <IconButton icon="x" size={36} onPress={() => navigation.goBack()} accessibilityLabel="Close" />
         </View>
       </View>
 
-      {/* Celebration banner */}
       {celebratingId && (
-        <Card style={{ backgroundColor: colors.success + '20', borderColor: colors.success + '40', marginBottom: 14 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <AppText style={{ fontSize: 24 }}>🎉</AppText>
-            <View>
-              <AppText style={{ fontWeight: '700', color: colors.success }}>Goal Completed!</AppText>
-              <AppText muted style={{ fontSize: 12 }}>Congratulations — you did it!</AppText>
-            </View>
+        <View style={[styles.celebrationBanner, { backgroundColor: colors.success + '20', borderColor: colors.success + '40' }]}>
+          <AppText style={{ fontSize: 28 }}>🎉</AppText>
+          <View style={{ marginLeft: 16 }}>
+            <AppText style={{ fontWeight: '800', fontSize: 16, color: colors.success }}>Goal Completed!</AppText>
+            <AppText muted style={{ fontSize: 13, marginTop: 2 }}>Congratulations — you did it!</AppText>
           </View>
-        </Card>
-      )}
-
-      {/* Summary bar */}
-      {goals.length > 0 && (
-        <Card style={{ marginBottom: 16 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
-            <View style={{ alignItems: 'center' }}>
-              <AppText style={{ fontSize: 22, fontWeight: '800', color: colors.accent }}>{active.length}</AppText>
-              <AppText muted style={{ fontSize: 12 }}>Active</AppText>
-            </View>
-            <View style={{ width: 1, backgroundColor: colors.border }} />
-            <View style={{ alignItems: 'center' }}>
-              <AppText style={{ fontSize: 22, fontWeight: '800', color: colors.success }}>{completed.length}</AppText>
-              <AppText muted style={{ fontSize: 12 }}>Completed</AppText>
-            </View>
-          </View>
-        </Card>
-      )}
-
-      {loading && (
-        <AppText muted style={{ textAlign: 'center', marginTop: 20 }}>Loading goals…</AppText>
-      )}
-
-      {!loading && goals.length === 0 && (
-        <View style={{ alignItems: 'center', marginTop: 60 }}>
-          <Icon name="check-circle" size={48} color={colors.muted} />
-          <AppText style={{ color: colors.muted, marginTop: 14, fontSize: 16 }}>No savings goals yet</AppText>
-          <AppText muted style={{ fontSize: 13, marginTop: 6, textAlign: 'center' }}>
-            Tap + to set a savings target and track your progress
-          </AppText>
-          <AppButton title="Create First Goal" onPress={() => { setEditTarget(null); setFormVisible(true); }} style={{ marginTop: 20 }} />
         </View>
       )}
 
-      {active.map((g) => (
-        <GoalCard
-          key={g.id}
-          goal={g}
-          onContribute={() => setContributeTarget(g)}
-          onEdit={() => { setEditTarget(g); setFormVisible(true); }}
-          onDelete={() => handleDelete(g.id, g.name)}
-        />
-      ))}
-
-      {completed.length > 0 && (
-        <>
-          <AppText muted style={{ fontSize: 13, marginBottom: 10, marginTop: 4 }}>Completed 🏆</AppText>
-          {completed.map((g) => (
-            <GoalCard
-              key={g.id}
-              goal={g}
-              onContribute={() => setContributeTarget(g)}
-              onEdit={() => { setEditTarget(g); setFormVisible(true); }}
-              onDelete={() => handleDelete(g.id, g.name)}
-            />
-          ))}
-        </>
+      {goals.length > 0 && (
+        <View style={[styles.summaryCard, cardShadow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={{ alignItems: 'center', flex: 1 }}>
+            <AppText style={{ fontSize: 28, fontWeight: '800', color: colors.accent }}>{active.length}</AppText>
+            <AppText muted style={{ fontSize: 13, marginTop: 2 }}>Active Goals</AppText>
+          </View>
+          <View style={{ width: 1, backgroundColor: colors.border, height: 40 }} />
+          <View style={{ alignItems: 'center', flex: 1 }}>
+            <AppText style={{ fontSize: 28, fontWeight: '800', color: colors.success }}>{completed.length}</AppText>
+            <AppText muted style={{ fontSize: 13, marginTop: 2 }}>Completed</AppText>
+          </View>
+        </View>
       )}
+
+      <FlatList
+        data={[...active, ...completed]}
+        keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: scaleHeight(40) }}
+        ListEmptyComponent={() => (
+          !loading ? (
+            <View style={[styles.emptyState, { borderColor: colors.border }]}>
+              <Icon name="target" size={48} color={colors.muted} />
+              <AppText style={{ color: colors.text, fontWeight: '700', marginTop: 16, fontSize: 18 }}>No savings goals yet</AppText>
+              <AppText muted style={{ fontSize: 14, marginTop: 8, textAlign: 'center' }}>
+                Tap the + button to set a savings target and track your progress toward your dreams.
+              </AppText>
+              <AppButton title="Create First Goal" onPress={() => { setEditTarget(null); setFormVisible(true); }} style={{ marginTop: 24, width: '100%' }} />
+            </View>
+          ) : (
+            <AppText muted style={{ textAlign: 'center', marginTop: 40 }}>Loading goals…</AppText>
+          )
+        )}
+        renderItem={({ item, index }) => {
+          const isCompletedSectionHeader = index === active.length && completed.length > 0;
+          return (
+            <>
+              {isCompletedSectionHeader && (
+                <AppText style={{ fontSize: 14, fontWeight: '700', color: colors.muted, marginBottom: 12, marginTop: 8 }}>
+                  Completed 🏆
+                </AppText>
+              )}
+              <GoalCard
+                goal={item}
+                shadowStyle={cardShadow}
+                onContribute={() => setContributeTarget(item)}
+                onEdit={() => { setEditTarget(item); setFormVisible(true); }}
+                onDelete={() => handleDelete(item.id, item.name)}
+              />
+            </>
+          );
+        }}
+      />
 
       <GoalFormModal
         visible={formVisible}
@@ -499,35 +418,54 @@ export default function GoalsScreen({ navigation }: any) {
         onClose={() => setContributeTarget(null)}
         onContribute={handleContribute}
       />
-    </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: scaleHeight(55),
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: scaleHeight(24),
+  },
+  celebrationBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  summaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 24,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 24,
   },
   goalRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
-  progressTrack: {
-    height: 5,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    borderRadius: 3,
   },
   badge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: radius.full,
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: 32,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    marginTop: 20,
   },
   modalOverlay: {
     flex: 1,
@@ -536,13 +474,20 @@ const styles = StyleSheet.create({
   modalSheet: {
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    padding: spacing.lg,
+    padding: 24,
     paddingBottom: 40,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+  },
+  cardShadowLight: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
 });

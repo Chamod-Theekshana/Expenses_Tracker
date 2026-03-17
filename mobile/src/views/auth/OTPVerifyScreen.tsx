@@ -1,18 +1,19 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert, ScrollView } from 'react-native';
 import AppText from '../../components/AppText';
 import AppButton from '../../components/AppButton';
 import Card from '../../components/Card';
 import OTPInput from '../../components/OTPInput';
-import { spacing } from '../../theme/colors';
+import Icon from '../../components/Icon';
+import IconButton from '../../components/IconButton';
+import { radius, spacing } from '../../theme/colors';
+import { scaleHeight } from '../../constants/size';
 import { OtpService } from '../../services/OtpService';
-import { AuthContext } from '../../store/auth';
 import { ThemeContext } from '../../store/theme';
 
 export default function OTPVerifyScreen({ route, navigation }: any) {
   const { email } = route.params;
-  const { setAuthToken } = useContext(AuthContext);
-  const { colors } = useContext(ThemeContext);
+  const { colors, theme } = useContext(ThemeContext);
 
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
@@ -60,41 +61,65 @@ export default function OTPVerifyScreen({ route, navigation }: any) {
     }
   };
 
+  const cardShadow = theme === 'light' ? styles.cardShadowLight : {};
+
   return (
     <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
-      <AppText title style={{ marginBottom: 6 }}>
-        Enter Passkey
-      </AppText>
-      <AppText muted style={{ marginBottom: 18 }}>
-        We sent a 6-digit code to {email}
-      </AppText>
+      <View style={styles.topBar}>
+        <IconButton icon="arrow-left" size={40} iconSize={24} onPress={() => navigation.goBack()} />
+      </View>
 
-      <Card style={{ marginBottom: 16 }}>
-        <AppText muted style={{ marginBottom: 16, textAlign: 'center' }}>
-          Passkey
-        </AppText>
-        <OTPInput value={otp} onChangeText={setOtp} editable={!loading} />
+      <ScrollView 
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: scaleHeight(40) }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.header}>
+          <View style={[styles.iconWrap, { backgroundColor: colors.accent + '20' }]}>
+            <Icon name="key" size={32} color={colors.accent} />
+          </View>
+          <AppText title style={{ fontSize: 28, marginTop: 16 }}>
+            Verify Passkey
+          </AppText>
+          <AppText muted style={{ fontSize: 16, marginTop: 8, textAlign: 'center' }}>
+            We've sent a 6-digit secure code to
+          </AppText>
+          <AppText style={{ fontSize: 16, fontWeight: '700', color: colors.text, marginTop: 4 }}>
+            {email}
+          </AppText>
+        </View>
 
-        <AppButton
-          title="Verify"
-          onPress={handleVerify}
-          loading={loading}
-          disabled={otp.length !== 6}
-          style={{ marginTop: 24 }}
-        />
+        <Card style={[styles.formCard, cardShadow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <AppText style={[styles.label, { color: colors.text, textAlign: 'center', marginBottom: 24 }]}>
+            Enter 6-Digit Passkey
+          </AppText>
+          
+          <OTPInput value={otp} onChangeText={setOtp} editable={!loading} />
 
-        <AppButton
-          title={resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Passkey'}
-          variant="secondary"
-          onPress={handleResend}
-          disabled={resendCooldown > 0 || loading}
-          style={{ marginTop: 12 }}
-        />
-      </Card>
+          <AppButton
+            title="Verify & Continue"
+            onPress={handleVerify}
+            loading={loading}
+            disabled={otp.length !== 6 || loading}
+            style={{ marginTop: 32 }}
+            size="lg"
+          />
 
-      <AppText muted style={{ textAlign: 'center', fontSize: 13 }}>
-        Passkey expires in 5 minutes
-      </AppText>
+          <AppButton
+            title={resendCooldown > 0 ? `Resend Passkey in ${resendCooldown}s` : 'Resend Passkey'}
+            variant="ghost"
+            onPress={handleResend}
+            disabled={resendCooldown > 0 || loading}
+            style={{ marginTop: 12 }}
+          />
+        </Card>
+
+        <View style={styles.footer}>
+          <AppText muted style={{ fontSize: 13, textAlign: 'center' }}>
+            Passkey expires in 5 minutes
+          </AppText>
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -102,7 +127,46 @@ export default function OTPVerifyScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    padding: spacing.lg,
-    paddingTop: 56,
+    paddingHorizontal: spacing.xl,
+    paddingTop: scaleHeight(50),
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    marginLeft: -8,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: scaleHeight(30),
+  },
+  iconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  formCard: {
+    padding: 24,
+    borderRadius: radius.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  label: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  footer: {
+    marginTop: 'auto',
+    alignItems: 'center',
+    paddingTop: 32,
+  },
+  cardShadowLight: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+    elevation: 3,
   },
 });

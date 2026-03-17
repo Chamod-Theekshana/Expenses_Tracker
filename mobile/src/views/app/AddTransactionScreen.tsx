@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { View, StyleSheet, Alert, Pressable, Image, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Alert, Pressable, Image, ActivityIndicator, ScrollView } from 'react-native';
 import * as ImagePicker from 'react-native-image-picker';
 import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
@@ -7,11 +7,10 @@ import AppButton from '../../components/AppButton';
 import Card from '../../components/Card';
 import Icon from '../../components/Icon';
 import Chip from '../../components/Chip';
-import Screen from '../../components/Screen';
 import IconButton from '../../components/IconButton';
 import { getCategoryMeta } from '../../constants/categories';
-import { radius } from '../../theme/colors';
-import { TransactionsContext, Tx } from '../../store/transactions';
+import { radius, spacing } from '../../theme/colors';
+import { TransactionsContext } from '../../store/transactions';
 import { AuthContext } from '../../store/auth';
 import { scaleHeight } from '../../constants/size';
 import { ThemeContext } from '../../store/theme';
@@ -24,7 +23,7 @@ const fallbackExpenseCategories = ['Food', 'Transport', 'Bills', 'Shopping', 'Ot
 export default function AddTransactionScreen({ navigation }: any) {
   const { addTx } = useContext(TransactionsContext);
   const { userId } = useContext(AuthContext);
-  const { colors } = useContext(ThemeContext);
+  const { colors, theme } = useContext(ThemeContext);
   const { currency: preferredCurrency } = useContext(ProfileContext);
 
   const [title, setTitle] = useState('');
@@ -141,189 +140,236 @@ export default function AddTransactionScreen({ navigation }: any) {
   const yesterdayStr = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
   const isYesterday = dateISO === yesterdayStr;
 
+  const cardShadow = theme === 'light' ? styles.cardShadowLight : {};
+
   return (
-    <Screen
-      preset={isIncome ? 'fixed' : 'scroll'}
-      padded
-      contentContainerStyle={!isIncome ? { paddingBottom: scaleHeight(50) } : undefined}
-    >
+    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
       <View style={styles.topRow}>
-        <AppText title>Add</AppText>
-        <IconButton icon="x" onPress={() => navigation.goBack()} accessibilityLabel="Close" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="plus" size={20} color={colors.accent} />
+          </View>
+          <AppText title style={{ fontSize: 24 }}>Transaction</AppText>
+        </View>
+        <IconButton icon="x" size={36} iconSize={24} onPress={() => navigation.goBack()} />
       </View>
 
-      <Card style={{ marginTop: 14 }}>
-        <AppText muted style={{ marginBottom: 10, fontSize: 13 }}>
-          Title
-        </AppText>
-        <AppInput value={title} onChangeText={setTitle} placeholder="e.g., Uber, Rent, Groceries" />
-
-        <View style={{ height: 16 }} />
-
-        <AppText muted style={{ marginBottom: 10, fontSize: 13 }}>
-          Amount
-        </AppText>
-        <AppInput
-          value={amountRaw}
-          onChangeText={setAmountRaw}
-          keyboardType="decimal-pad"
-          placeholder="e.g., 12.50"
-        />
-
-        <View style={{ height: 18 }} />
-
-        <AppText muted style={{ marginBottom: 10, fontSize: 13 }}>
-          Date
-        </AppText>
-        {/* Date quick presets */}
-        <View style={styles.dateRow}>
-          <Chip label="Today" selected={isToday} onPress={setToday} size="sm" />
-          <Chip label="Yesterday" selected={isYesterday} onPress={setYesterday} size="sm" />
-          <View style={{ flex: 1 }}>
-            <AppInput
-              value={dateISO}
-              onChangeText={setDateISO}
-              placeholder="YYYY-MM-DD"
-              style={{ fontSize: 13 }}
-            />
-          </View>
-        </View>
-
-        {/* Currency selection removed to enforce global Profile preference */}
-        <View style={{ height: 18 }} />
-
-        <View style={styles.chipsRow}>
-          <Pressable
-            onPress={() => setIsIncome(false)}
-            style={[
-              styles.chip,
-              { backgroundColor: colors.surface2, borderColor: colors.border },
-              !isIncome && { backgroundColor: colors.danger, borderColor: 'transparent' },
-            ]}
-          >
-            <Icon name="trending-down" size={18} color={!isIncome ? '#FFF' : colors.danger} />
-            <AppText style={{ fontWeight: '700', fontSize: 13, color: !isIncome ? '#FFF' : colors.text, marginTop: 2 }}>Expense</AppText>
-          </Pressable>
-          <Pressable
-            onPress={() => setIsIncome(true)}
-            style={[
-              styles.chip,
-              { backgroundColor: colors.surface2, borderColor: colors.border },
-              isIncome && { backgroundColor: colors.success, borderColor: 'transparent' },
-            ]}
-          >
-            <Icon name="trending-up" size={18} color={isIncome ? '#FFF' : colors.success} />
-            <AppText style={{ fontWeight: '700', fontSize: 13, color: isIncome ? '#FFF' : colors.text, marginTop: 2 }}>Income</AppText>
-          </Pressable>
-        </View>
-
-        {!isIncome ? (
-          <>
-            <AppText muted style={{ marginTop: 16, marginBottom: 10, fontSize: 13 }}>
-              Category
-            </AppText>
-            <View style={styles.catWrap}>
-              {(cats.length
-                ? cats
-                    .filter((c) => c.type === 'expense' || c.type === 'both')
-                    .map((c) => c.name)
-                : fallbackExpenseCategories
-              ).map((c) => {
-                const meta = getCategoryMeta(c);
-                const isActive = category === c;
-                return (
-                  <Chip
-                    key={c}
-                    label={c}
-                    selected={isActive}
-                    onPress={() => setCategory(c)}
-                    iconLeft={meta.icon}
-                    accentColor={meta.color}
-                    size="sm"
-                    style={{ marginRight: 8, marginBottom: 8 }}
-                  />
-                );
-              })}
-            </View>
-            {!cats.length && !catLoading ? (
-              <AppText muted style={{ marginTop: 10, fontSize: 12 }}>
-                Using built-in categories (could not load from server).
-              </AppText>
-            ) : null}
-          </>
-        ) : null}
-
-        <AppButton title="Save Transaction" onPress={save} disabled={!canSave} loading={saving} style={{ marginTop: 20 }} />
-
-        {/* Receipt Attachment */}
-        <View style={{ height: 18 }} />
-        <AppText muted style={{ marginBottom: 10, fontSize: 13 }}>Receipt (optional)</AppText>
-        {receiptUri ? (
-          <View style={styles.receiptPreview}>
-            <Image source={{ uri: receiptUri }} style={styles.receiptImg} resizeMode="cover" />
-            {uploadingReceipt && (
-              <View style={styles.receiptOverlay}>
-                <ActivityIndicator color="#FFF" />
-                <AppText style={{ color: '#FFF', fontSize: 12, marginTop: 4 }}>Uploading…</AppText>
-              </View>
-            )}
-            {!uploadingReceipt && receiptUrl && (
-              <View style={[styles.receiptBadge, { backgroundColor: colors.success + 'CC' }]}>
-                <Icon name="check" size={14} color="#FFF" />
-                <AppText style={{ color: '#FFF', fontSize: 11, marginLeft: 4 }}>Uploaded</AppText>
-              </View>
-            )}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        <Card style={[styles.formCard, cardShadow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          
+          <View style={styles.chipsRow}>
             <Pressable
-              onPress={() => { setReceiptUri(null); setReceiptUrl(null); }}
-              style={[styles.receiptRemove, { backgroundColor: colors.danger }]}
+              onPress={() => setIsIncome(false)}
+              style={[
+                styles.typeChip,
+                { backgroundColor: colors.surface2, borderColor: colors.border },
+                !isIncome && { backgroundColor: colors.danger, borderColor: 'transparent' },
+              ]}
             >
-              <Icon name="x" size={14} color="#FFF" />
+              <Icon name="arrow-down-circle" size={18} color={!isIncome ? '#FFF' : colors.danger} />
+              <AppText style={{ fontWeight: '700', fontSize: 14, color: !isIncome ? '#FFF' : colors.text, marginLeft: 8 }}>Expense</AppText>
+            </Pressable>
+            <Pressable
+              onPress={() => setIsIncome(true)}
+              style={[
+                styles.typeChip,
+                { backgroundColor: colors.surface2, borderColor: colors.border },
+                isIncome && { backgroundColor: colors.success, borderColor: 'transparent' },
+              ]}
+            >
+              <Icon name="arrow-up-circle" size={18} color={isIncome ? '#FFF' : colors.success} />
+              <AppText style={{ fontWeight: '700', fontSize: 14, color: isIncome ? '#FFF' : colors.text, marginLeft: 8 }}>Income</AppText>
             </Pressable>
           </View>
-        ) : (
-          <Pressable onPress={pickReceipt} style={[styles.receiptPicker, { borderColor: colors.border, backgroundColor: colors.surface2 }]}>
-            <Icon name="camera" size={20} color={colors.accent} />
-            <AppText style={{ color: colors.accent, fontSize: 13, marginLeft: 8, fontWeight: '600' }}>
-              Attach Receipt
-            </AppText>
-          </Pressable>
-        )}
-      </Card>
-    </Screen>
+
+          <View style={{ height: 24 }} />
+
+          <AppText muted style={styles.label}>Amount</AppText>
+          <AppInput
+            value={amountRaw}
+            onChangeText={setAmountRaw}
+            keyboardType="decimal-pad"
+            placeholder="0.00"
+            style={[styles.amountInput, { color: isIncome ? colors.success : colors.text }]}
+            left={<AppText style={{ fontSize: 24, fontWeight: '700', color: colors.muted, marginRight: 8 }}>{preferredCurrency}</AppText>}
+          />
+
+          <View style={{ height: 16 }} />
+
+          <AppText muted style={styles.label}>Title</AppText>
+          <AppInput value={title} onChangeText={setTitle} placeholder="What was this for?" />
+
+          <View style={{ height: 16 }} />
+
+          <AppText muted style={styles.label}>Date</AppText>
+          <View style={styles.dateRow}>
+            <Chip 
+              label="Today" 
+              selected={isToday} 
+              onPress={setToday} 
+              size="md" 
+              style={{ backgroundColor: isToday ? colors.accent : colors.surface2 }}
+            />
+            <Chip 
+              label="Yesterday" 
+              selected={isYesterday} 
+              onPress={setYesterday} 
+              size="md" 
+              style={{ backgroundColor: isYesterday ? colors.accent : colors.surface2 }}
+            />
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <AppInput
+                value={dateISO}
+                onChangeText={setDateISO}
+                placeholder="YYYY-MM-DD"
+              />
+            </View>
+          </View>
+
+          {!isIncome ? (
+            <>
+              <View style={{ height: 24 }} />
+              <AppText muted style={styles.label}>Category</AppText>
+              <View style={styles.catWrap}>
+                {(cats.length
+                  ? cats
+                      .filter((c) => c.type === 'expense' || c.type === 'both')
+                      .map((c) => c.name)
+                  : fallbackExpenseCategories
+                ).map((c) => {
+                  const meta = getCategoryMeta(c);
+                  const isActive = category === c;
+                  return (
+                    <Pressable
+                      key={c}
+                      onPress={() => setCategory(c)}
+                      style={[
+                        styles.catPill,
+                        {
+                          backgroundColor: isActive ? meta.color : colors.surface2,
+                          borderColor: isActive ? meta.color : colors.border,
+                        },
+                      ]}
+                    >
+                      <Icon name={meta.icon} size={14} color={isActive ? '#FFF' : meta.color} />
+                      <AppText style={{ fontSize: 13, fontWeight: '600', marginLeft: 6, color: isActive ? '#FFF' : colors.text }}>
+                        {c}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {!cats.length && !catLoading ? (
+                <AppText muted style={{ marginTop: 8, fontSize: 12 }}>
+                  Using built-in categories.
+                </AppText>
+              ) : null}
+            </>
+          ) : null}
+
+          <View style={{ height: 24 }} />
+          <AppText muted style={styles.label}>Receipt (optional)</AppText>
+          {receiptUri ? (
+            <View style={[styles.receiptPreview, { borderColor: colors.border }]}>
+              <Image source={{ uri: receiptUri }} style={styles.receiptImg} resizeMode="cover" />
+              {uploadingReceipt && (
+                <View style={styles.receiptOverlay}>
+                  <ActivityIndicator color="#FFF" />
+                  <AppText style={{ color: '#FFF', fontSize: 13, marginTop: 8, fontWeight: '600' }}>Uploading…</AppText>
+                </View>
+              )}
+              {!uploadingReceipt && receiptUrl && (
+                <View style={[styles.receiptBadge, { backgroundColor: colors.success + 'CC' }]}>
+                  <Icon name="check" size={14} color="#FFF" />
+                  <AppText style={{ color: '#FFF', fontSize: 11, marginLeft: 4, fontWeight: '700' }}>Uploaded</AppText>
+                </View>
+              )}
+              <Pressable
+                onPress={() => { setReceiptUri(null); setReceiptUrl(null); }}
+                style={[styles.receiptRemove, { backgroundColor: colors.danger }]}
+              >
+                <Icon name="x" size={16} color="#FFF" />
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable onPress={pickReceipt} style={[styles.receiptPicker, { borderColor: colors.border, backgroundColor: colors.surface2 }]}>
+              <Icon name="camera" size={24} color={colors.accent} />
+              <AppText style={{ color: colors.accent, fontSize: 14, marginLeft: 12, fontWeight: '600' }}>
+                Tap to attach receipt
+              </AppText>
+            </Pressable>
+          )}
+
+          <AppButton 
+            title="Save Transaction" 
+            onPress={save} 
+            disabled={!canSave} 
+            loading={saving} 
+            style={{ marginTop: 32 }} 
+            size="lg"
+          />
+        </Card>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: {
+    flex: 1,
+    paddingTop: scaleHeight(55),
+  },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    paddingHorizontal: spacing.lg,
+    marginBottom: scaleHeight(20),
+  },
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: scaleHeight(40),
+  },
+  formCard: {
+    padding: 24,
+    borderRadius: radius.xl,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   chipsRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
-  chip: {
+  typeChip: {
     flex: 1,
-    height: 56,
-    borderRadius: radius.md,
-    borderWidth: 1,
+    height: 52,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  label: {
+    fontSize: 13,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  amountInput: {
+    fontSize: 28,
+    fontWeight: '800',
+    height: 60,
   },
   catWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
-  cat: {
+  catPill: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: radius.md,
-    borderWidth: 1,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   dateRow: {
     flexDirection: 'row',
@@ -334,16 +380,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 52,
-    borderRadius: radius.md,
+    height: 64,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderStyle: 'dashed',
   },
   receiptPreview: {
-    height: 160,
-    borderRadius: radius.md,
+    height: 200,
+    borderRadius: radius.lg,
     overflow: 'hidden',
     position: 'relative',
+    borderWidth: StyleSheet.hairlineWidth,
   },
   receiptImg: {
     width: '100%',
@@ -351,28 +398,35 @@ const styles = StyleSheet.create({
   },
   receiptOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   receiptBadge: {
     position: 'absolute',
-    bottom: 8,
-    left: 8,
+    bottom: 12,
+    left: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: radius.full,
   },
   receiptRemove: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    top: 12,
+    right: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  cardShadowLight: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
 });

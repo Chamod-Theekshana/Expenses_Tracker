@@ -8,18 +8,17 @@ import { AuthContext } from '../store/auth';
 import { ProfileContext } from '../store/profile';
 import AppText from './AppText';
 import Icon, { IconName } from './Icon';
-import DateFilterBar from './DateFilterBar';
 import { radius } from '../theme/colors';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.75; // 75% of screen width
+const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.78; // 78% of screen width
 
 export default function Sidebar() {
   const insets = useSafeAreaInsets();
   const navigation: any = useNavigation();
   const { isOpen, closeSidebar } = useContext(SidebarContext);
-  const { colors } = useContext(ThemeContext);
-  const { userEmail } = useContext(AuthContext);
+  const { colors, theme, setTheme } = useContext(ThemeContext);
+  const { userEmail, signOut } = useContext(AuthContext);
   const { name, profilePhoto } = useContext(ProfileContext);
 
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
@@ -62,27 +61,42 @@ export default function Sidebar() {
     }, 150);
   };
 
-  const NavItem = ({ title, icon, screen }: { title: string, icon: IconName, screen: string }) => (
+  const NavItem = ({
+    title,
+    icon,
+    screen,
+    isLast,
+  }: {
+    title: string;
+    icon: IconName;
+    screen: string;
+    isLast?: boolean;
+  }) => (
     <Pressable
-      style={({ pressed }) => [
-        styles.navItem,
-        { backgroundColor: pressed ? colors.surface2 : 'transparent' }
-      ]}
       onPress={() => handleNav(screen)}
+      style={({ pressed }) => [
+        styles.navRow,
+        { backgroundColor: pressed ? colors.surface2 : 'transparent' },
+      ]}
     >
-      <Icon name={icon} size={20} color={colors.accent} />
-      <AppText style={[styles.navText, { color: colors.text }]}>{title}</AppText>
+      <View style={styles.navRowInner}>
+        <View style={styles.navRowLeft}>
+          <Icon name={icon} size={22} color={colors.text} />
+          <AppText style={[styles.navText, { color: colors.text }]}>{title}</AppText>
+        </View>
+        <Icon name="chevron-right" size={18} color={colors.muted} />
+      </View>
+      {!isLast && <View style={[styles.rowDivider, { backgroundColor: colors.border }]} />}
     </Pressable>
   );
 
   return (
     <>
-      {/* Backdrop */}
       <Animated.View
         style={[
           styles.backdrop,
           {
-            backgroundColor: colors.cardShadow,
+            backgroundColor: 'rgba(0,0,0,0.4)',
             opacity: fadeAnim,
             pointerEvents: isOpen ? 'auto' : 'none',
           },
@@ -91,7 +105,6 @@ export default function Sidebar() {
         <Pressable style={StyleSheet.absoluteFill} onPress={closeSidebar} />
       </Animated.View>
 
-      {/* Sidebar Content */}
       <Animated.View
         style={[
           styles.sidebar,
@@ -105,41 +118,82 @@ export default function Sidebar() {
         ]}
       >
         <View style={styles.header}>
-          {profilePhoto ? (
-            <Image source={{ uri: profilePhoto }} style={styles.profileImage} />
-          ) : (
-            <View style={[styles.profilePlaceholder, { backgroundColor: colors.accent }]}>
-              <AppText style={styles.profileInitial}>{name.charAt(0).toUpperCase() || 'U'}</AppText>
-            </View>
-          )}
+          <View style={styles.headerTopRow}>
+            {profilePhoto ? (
+              <Image source={{ uri: profilePhoto }} style={styles.profileImage} />
+            ) : (
+              <View style={[styles.profilePlaceholder, { backgroundColor: colors.surface2 }]}>
+                <AppText style={[styles.profileInitial, { color: colors.text }]}>
+                  {(name || userEmail || 'U').charAt(0).toUpperCase()}
+                </AppText>
+              </View>
+            )}
 
-          <View style={{ marginTop: 12 }}>
+            <View style={[styles.themePill, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Light theme"
+                onPress={() => setTheme('light')}
+                style={[
+                  styles.themePillBtn,
+                  theme === 'light' && { backgroundColor: colors.accent },
+                ]}
+              >
+                <Icon name="sun" size={18} color={theme === 'light' ? '#FFF' : colors.text} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Dark theme"
+                onPress={() => setTheme('dark')}
+                style={[
+                  styles.themePillBtn,
+                  theme === 'dark' && { backgroundColor: colors.accent },
+                ]}
+              >
+                <Icon name="moon" size={18} color={theme === 'dark' ? '#FFF' : colors.text} />
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.headerTextBlock}>
             <AppText style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-              {name || 'User Profile'}
+              {name || 'User Name'}
             </AppText>
-            <AppText muted style={styles.email} numberOfLines={1}>
+            <AppText style={[styles.email, { color: colors.muted }]} numberOfLines={1}>
               {userEmail}
             </AppText>
           </View>
         </View>
 
         <View style={styles.content}>
-          {/* ── DATE FILTER ── */}
-          <View style={{ marginBottom: 16 }}>
-            <AppText muted style={styles.sectionHeader}>DATE FILTER</AppText>
-            <DateFilterBar />
+          <AppText style={[styles.sectionHeader, { color: colors.muted }]}>Financial Planning</AppText>
+          <View style={[styles.navGroup, { borderColor: colors.border }]}>
+            <NavItem title="Saving Goals" icon="target" screen="Goals" />
+            <NavItem title="Budget Management" icon="chart" screen="Budgets" />
+            <NavItem title="Recurring Transactions" icon="refresh-cw" screen="Recurring" isLast />
           </View>
 
-          <AppText muted style={styles.sectionHeader}>FINANCIAL PLANNING</AppText>
-          <NavItem title="Savings Goals" icon="target" screen="Goals" />
-          <NavItem title="Manage Budgets" icon="chart" screen="Budgets" />
-          <NavItem title="Recurring Transactions" icon="refresh-cw" screen="Recurring" />
+          <AppText style={[styles.sectionHeader, { color: colors.muted }]}>Account</AppText>
+          <View style={[styles.navGroup, { borderColor: colors.border }]}>
+            <NavItem title="Profile Settings" icon="profile" screen="Profile" />
+            <NavItem title="Categories" icon="tag" screen="Categories" isLast />
+          </View>
         </View>
 
         <View style={styles.footer}>
-          <AppText muted style={{ fontSize: 11, textAlign: 'center' }}>
-            PulseSpend v1.0
-          </AppText>
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <Pressable
+            onPress={signOut}
+            style={({ pressed }) => [
+              styles.logoutRow,
+              { backgroundColor: pressed ? colors.surface2 : 'transparent' },
+            ]}
+          >
+            <View style={styles.logoutRowLeft}>
+              <Icon name="log-out" size={22} color={colors.danger} />
+              <AppText style={[styles.logoutText, { color: colors.danger }]}>Logout</AppText>
+            </View>
+          </Pressable>
         </View>
       </Animated.View>
     </>
@@ -154,8 +208,6 @@ const styles = StyleSheet.create({
   sidebar: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 901,
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(0,0,0,0.05)',
     elevation: 10,
     shadowColor: '#000',
     shadowOpacity: 0.2,
@@ -163,75 +215,117 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 5, height: 0 },
   },
   header: {
-    padding: 24,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(150,150,150,0.2)',
+    paddingHorizontal: 22,
+    paddingTop: 18,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 40,
+    justifyContent: 'space-between',
   },
   profileImage: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.1)',
+    width: 66,
+    height: 66,
+    borderRadius: 33,
   },
   profilePlaceholder: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 66,
+    height: 66,
+    borderRadius: 33,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
   },
   profileInitial: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#FFF',
+  },
+  headerTextBlock: {
+    marginTop: 14,
   },
   name: {
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: '800',
   },
   email: {
     fontSize: 13,
     marginTop: 2,
-    textAlign: 'center',
+  },
+  themePill: {
+    flexDirection: 'row',
+    borderRadius: 18,
+    padding: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  themePillBtn: {
+    width: 44,
+    height: 34,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   content: {
     flex: 1,
-    paddingVertical: 16,
+    paddingTop: 18,
   },
-  navItem: {
+  sectionHeader: {
+    fontSize: 14,
+    fontWeight: '600',
+    paddingHorizontal: 22,
+    marginBottom: 10,
+    marginTop: 18,
+  },
+  navGroup: {
+    marginHorizontal: 22,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
+  },
+  navRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  navRowInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
+    justifyContent: 'space-between',
+  },
+  navRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   navText: {
     fontSize: 16,
     fontWeight: '600',
-    marginLeft: 16,
+    marginLeft: 12,
   },
-  sectionHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+  rowDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginTop: 14,
+    marginLeft: 34,
+  },
+  footer: {
+    paddingHorizontal: 22,
+    paddingBottom: 26,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: 12,
-    marginHorizontal: 24,
+    width: '100%',
+    marginBottom: 10,
   },
-  footer: {
-    padding: 24,
-    paddingBottom: 30,
+  logoutRow: {
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    borderRadius: radius.md,
+  },
+  logoutRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoutText: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 12,
   },
 });

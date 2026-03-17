@@ -1,7 +1,7 @@
-import React, { useContext, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
+import React, { useContext, useMemo, useState } from 'react';
+import { View, StyleSheet, ScrollView, Dimensions, Pressable } from 'react-native';
+import { PieChart, BarChart } from 'react-native-gifted-charts';
 import AppText from '../../components/AppText';
-import Card from '../../components/Card';
 import { spacing, radius } from '../../theme/colors';
 import { TransactionsContext } from '../../store/transactions';
 import { DateFilterContext } from '../../store/dateFilter';
@@ -9,21 +9,26 @@ import { formatMoney } from '../../utils/money';
 import { scaleHeight } from '../../constants/size';
 import { ThemeContext } from '../../store/theme';
 import { ProfileContext } from '../../store/profile';
-import Svg, { Circle, Rect, Text as SvgText } from 'react-native-svg';
+import Icon from '../../components/Icon';
+import DateFilterSheet from '../../components/DateFilterSheet';
 
 const { width } = Dimensions.get('window');
 
 export default function ChartsScreen() {
   const { items } = useContext(TransactionsContext);
-  const { colors } = useContext(ThemeContext);
-  const { matchesFilter, filterLabel, hasActiveFilter } = useContext(DateFilterContext);
+  const { colors, theme } = useContext(ThemeContext);
+  const { matchesFilter, hasActiveFilter } = useContext(DateFilterContext);
   const { currency: preferredCurrency } = useContext(ProfileContext);
+
+  const [isDateFilterVisible, setIsDateFilterVisible] = useState(false);
 
   // Apply global date filter
   const filteredItems = useMemo(
     () => items.filter(t => matchesFilter(t.dateISO)),
     [items, matchesFilter],
   );
+
+  const chartColors = ['#6C5CE7', '#2ED573', '#00D9FF', '#FF6B6B', '#FFAA00'];
 
   const categoryData = useMemo(() => {
     const expenses = filteredItems.filter(t => t.amount < 0);
@@ -37,17 +42,17 @@ export default function ChartsScreen() {
     const total = Object.values(categories).reduce((a, b) => a + b, 0);
 
     return Object.entries(categories)
-      .map(([name, value]) => ({
+      .map(([name, value], index) => ({
         name,
         value,
         percentage: total > 0 ? (value / total) * 100 : 0,
+        color: chartColors[index % chartColors.length],
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
   }, [filteredItems]);
 
   const monthlyData = useMemo(() => {
-    // Build last 6 months (including current month) from real transactions
     const now = new Date();
     const months: { key: string; label: string; income: number; expense: number }[] = [];
 
@@ -71,161 +76,166 @@ export default function ChartsScreen() {
       if (t.amount < 0) byKey[key].expense += Math.abs(t.amount);
     });
 
-    return months.map(m => ({
-      month: m.label,
-      income: byKey[m.key].income,
-      expense: byKey[m.key].expense,
-    }));
-  }, [filteredItems]);
-
-  const chartColors = ['#6C5CE7', '#2ED573', '#00D9FF', '#FF6B6B', '#FFAA00'];
-
-  const renderPieChart = () => {
-    const size = width - 80;
-    const center = size / 2;
-    const r = size / 2 - 20;
-    let currentAngle = -90;
-
-    if (categoryData.length === 0) {
-      return (
-        <View style={{ height: size, justifyContent: 'center', alignItems: 'center' }}>
-          <AppText muted>No expense data</AppText>
-        </View>
+    // Formatting for BarChart (react-native-gifted-charts)
+    const barData: any[] = [];
+    months.forEach(m => {
+      const data = byKey[m.key];
+      barData.push(
+        { value: data.income, frontColor: colors.success, spacing: 4, label: m.label },
+        { value: data.expense, frontColor: colors.danger }
       );
-    }
+    });
+    return barData;
+  }, [filteredItems, colors]);
 
-    return (
-      <Svg width={size} height={size}>
-        {categoryData.map((item, index) => {
-          const angle = (item.percentage / 100) * 360;
-          const startAngle = currentAngle;
-
-          currentAngle += angle;
-
-          return (
-            <Circle
-              key={index}
-              cx={center}
-              cy={center}
-              r={r}
-              fill="none"
-              stroke={chartColors[index % chartColors.length]}
-              strokeWidth={40}
-              strokeDasharray={`${(item.percentage / 100) * (2 * Math.PI * r)} ${2 * Math.PI * r}`}
-              strokeDashoffset={-((startAngle + 90) / 360) * (2 * Math.PI * r)}
-            />
-          );
-        })}
-      </Svg>
-    );
-  };
-
-  const renderBarChart = () => {
-    const chartHeight = 200;
-    const chartWidth = width - 80;
-    const barWidth = (chartWidth / monthlyData.length) / 2.5;
-    const maxValue = Math.max(1, ...monthlyData.flatMap(d => [d.income, d.expense]));
-
-    return (
-      <View>
-        <Svg width={chartWidth} height={chartHeight}>
-          {monthlyData.map((data, index) => {
-            const x = (index * chartWidth) / monthlyData.length + 10;
-            const incomeHeight = (data.income / maxValue) * (chartHeight - 40);
-            const expenseHeight = (data.expense / maxValue) * (chartHeight - 40);
-
-            return (
-              <React.Fragment key={index}>
-                <Rect
-                  x={x}
-                  y={chartHeight - incomeHeight - 20}
-                  width={barWidth}
-                  height={incomeHeight}
-                  fill={colors.success}
-                  rx={4}
-                />
-                <Rect
-                  x={x + barWidth + 4}
-                  y={chartHeight - expenseHeight - 20}
-                  width={barWidth}
-                  height={expenseHeight}
-                  fill={colors.danger}
-                  rx={4}
-                />
-                <SvgText
-                  x={x + barWidth}
-                  y={chartHeight - 5}
-                  fill={colors.muted}
-                  fontSize="10"
-                  textAnchor="middle"
-                >
-                  {data.month}
-                </SvgText>
-              </React.Fragment>
-            );
-          })}
-        </Svg>
-        <View style={styles.legend}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
-            <AppText style={{ fontSize: 12, color: colors.muted }}>Income</AppText>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: colors.danger }]} />
-            <AppText style={{ fontSize: 12, color: colors.muted }}>Expense</AppText>
-          </View>
-        </View>
-      </View>
-    );
-  };
+  const cardShadow = theme === 'light' ? styles.cardShadowLight : {};
 
   return (
-    <ScrollView style={[styles.wrap, { backgroundColor: colors.bg }]} showsVerticalScrollIndicator={false}>
-      <AppText style={styles.title}>Analytics</AppText>
+    <View style={[styles.wrap, { backgroundColor: colors.bg }]}>
+      <View style={styles.header}>
+        <AppText title style={{ fontSize: 24, fontWeight: '700', color: colors.text }}>
+          Analytics
+        </AppText>
+        <Pressable onPress={() => setIsDateFilterVisible(true)} style={[styles.dateFilterBtn, { backgroundColor: colors.surface2 }]}>
+          <Icon name="calendar" size={18} color={hasActiveFilter ? colors.accent : colors.text} />
+          {hasActiveFilter && <View style={[styles.activeFilterDot, { backgroundColor: colors.accent }]} />}
+        </Pressable>
+      </View>
 
-      <Card elevated style={{ marginTop: 20 }}>
-        <AppText style={{ fontWeight: '700', fontSize: 16, marginBottom: 20 }}>Expense by Category</AppText>
-        {renderPieChart()}
-        <View style={{ marginTop: 20 }}>
-          {categoryData.map((item, index) => (
-            <View key={index} style={[styles.categoryRow, { borderBottomColor: colors.border }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                <View style={[styles.colorDot, { backgroundColor: chartColors[index % chartColors.length] }]} />
-                <AppText style={{ fontSize: 14 }}>{item.name}</AppText>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+        
+        {/* Expense by Category */}
+        <View style={[styles.card, cardShadow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <AppText style={{ fontWeight: '700', fontSize: 16, marginBottom: 24, color: colors.text }}>
+            Expense by Category
+          </AppText>
+          
+          <View style={{ alignItems: 'center', justifyContent: 'center', height: 220 }}>
+            {categoryData.length > 0 ? (
+              <PieChart
+                donut
+                data={categoryData}
+                radius={90}
+                innerRadius={60}
+                backgroundColor={colors.surface}
+                centerLabelComponent={() => {
+                  const totalExp = categoryData.reduce((acc, curr) => acc + curr.value, 0);
+                  return (
+                    <View style={{justifyContent: 'center', alignItems: 'center'}}>
+                      <AppText style={{fontSize: 22, color: colors.text, fontWeight: 'bold'}}>{formatMoney(totalExp, preferredCurrency)}</AppText>
+                      <AppText style={{fontSize: 12, color: colors.muted}}>Total</AppText>
+                    </View>
+                  );
+                }}
+              />
+            ) : (
+              <AppText style={{ color: colors.muted }}>No expense data for this period</AppText>
+            )}
+          </View>
+
+          <View style={{ marginTop: 24 }}>
+            {categoryData.map((item, index) => (
+              <View key={index} style={[styles.categoryRow, { borderBottomColor: colors.border }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                  <View style={[styles.colorDot, { backgroundColor: item.color }]} />
+                  <AppText style={{ fontSize: 14, color: colors.text, fontWeight: '500' }}>{item.name}</AppText>
+                </View>
+                <AppText style={{ fontWeight: '700', fontSize: 14, color: colors.text }}>{formatMoney(item.value, preferredCurrency)}</AppText>
+                <AppText style={{ fontSize: 12, width: 50, textAlign: 'right', color: colors.danger, fontWeight: '700' }}>
+                  {item.percentage.toFixed(1)}%
+                </AppText>
               </View>
-              <AppText mono style={{ fontWeight: '700', fontSize: 14 }}>{formatMoney(item.value, preferredCurrency)}</AppText>
-              <AppText muted style={{ fontSize: 12, width: 50, textAlign: 'right' }}>
-                {item.percentage.toFixed(1)}%
-              </AppText>
-            </View>
-          ))}
+            ))}
+          </View>
         </View>
-      </Card>
 
-      <Card elevated style={{ marginTop: 20 }}>
-        <AppText style={{ fontWeight: '700', fontSize: 16, marginBottom: 20 }}>Monthly Overview</AppText>
-        {renderBarChart()}
-      </Card>
+        {/* Monthly Overview */}
+        <View style={[styles.card, cardShadow, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 24 }]}>
+          <AppText style={{ fontWeight: '700', fontSize: 16, marginBottom: 24, color: colors.text }}>
+            Monthly Overview
+          </AppText>
+          
+          <View style={{ alignItems: 'center', marginLeft: -20 }}>
+            {monthlyData.length > 0 ? (
+              <BarChart
+                data={monthlyData}
+                width={width - 100}
+                height={200}
+                barWidth={12}
+                spacing={24}
+                roundedTop
+                xAxisThickness={1}
+                yAxisThickness={0}
+                xAxisColor={colors.border}
+                yAxisTextStyle={{ color: colors.muted, fontSize: 10 }}
+                xAxisLabelTextStyle={{ color: colors.muted, fontSize: 11 }}
+                hideRules
+                noOfSections={4}
+              />
+            ) : null}
+          </View>
+          
+          <View style={styles.legend}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
+              <AppText style={{ fontSize: 12, color: colors.muted }}>Income</AppText>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: colors.danger }]} />
+              <AppText style={{ fontSize: 12, color: colors.muted }}>Expense</AppText>
+            </View>
+          </View>
+        </View>
 
-      <View style={{ height: 40 }} />
-    </ScrollView>
+      </ScrollView>
+      
+      <DateFilterSheet visible={isDateFilterVisible} onClose={() => setIsDateFilterVisible(false)} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    padding: spacing.lg,
-    marginTop: scaleHeight(50),
+    paddingHorizontal: spacing.lg,
+    paddingTop: scaleHeight(55),
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  dateFilterBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeFilterDot: {
+    position: 'absolute',
+    bottom: 4,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  card: {
+    borderRadius: radius.lg,
+    padding: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  cardShadowLight: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
   categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   colorDot: {
@@ -237,13 +247,13 @@ const styles = StyleSheet.create({
   legend: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 20,
-    marginTop: 16,
+    gap: 24,
+    marginTop: 24,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   legendDot: {
     width: 10,

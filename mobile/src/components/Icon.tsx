@@ -3,6 +3,10 @@ import { ThemeContext } from '../store/theme';
 import {
   Home,
   ArrowLeftRight,
+  ArrowLeft,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  BarChart3,
   PieChart,
   User,
   Plus,
@@ -19,6 +23,9 @@ import {
   Tag,
   Clock,
   Repeat,
+  Sun,
+  Moon,
+  Globe,
   ShoppingBag,
   Car,
   Zap,
@@ -47,12 +54,25 @@ import {
   Bell,
   ArrowUp,
   ArrowDown,
-  type LucideProps,
+  UserPlus,
+  Eye,
+  EyeOff,
+  LogIn,
+  LogOut,
+  Key,
+  Mail,
+  PlusCircle,
+  Lock,
+  Settings,
 } from 'lucide-react-native';
 
 const iconMap = {
   home: Home,
   activity: ArrowLeftRight,
+  'arrow-left': ArrowLeft,
+  'arrow-up-circle': ArrowUpCircle,
+  'arrow-down-circle': ArrowDownCircle,
+  analytics: BarChart3,
   chart: PieChart,
   profile: User,
   plus: Plus,
@@ -69,6 +89,9 @@ const iconMap = {
   tag: Tag,
   clock: Clock,
   repeat: Repeat,
+  sun: Sun,
+  moon: Moon,
+  globe: Globe,
   'shopping-bag': ShoppingBag,
   car: Car,
   zap: Zap,
@@ -97,11 +120,21 @@ const iconMap = {
   bell: Bell,
   'arrow-up': ArrowUp,
   'arrow-down': ArrowDown,
+  'user-plus': UserPlus,
+  eye: Eye,
+  'eye-off': EyeOff,
+  'log-in': LogIn,
+  'log-out': LogOut,
+  key: Key,
+  mail: Mail,
+  'plus-circle': PlusCircle,
+  lock: Lock,
+  settings: Settings,
 } as const;
 
 export type IconName = keyof typeof iconMap;
 
-type IconSize = 10 | 12 | 14 | 16 | 18 | 20 | 24 | 26 | 28 | 32 | 36 | 40 | 48;
+type IconSize = 10 | 12 | 14 | 16 | 18 | 20 | 22 | 24 | 26 | 28 | 32 | 36 | 40 | 48;
 
 type Props = {
   name: IconName;
@@ -113,6 +146,11 @@ type Props = {
 export default function Icon({ name, size = 24, color, strokeWidth = 2 }: Props) {
   const { colors } = useContext(ThemeContext);
   const LucideIcon = iconMap[name];
+
+  if (!LucideIcon) {
+    console.warn(`Icon: unknown icon name "${name}"`);
+    return null;
+  }
 
   return (
     <LucideIcon

@@ -23,11 +23,11 @@ export type AppTabParamList = {
 const Tab = createBottomTabNavigator<AppTabParamList>();
 
 function Label({ title, focused, accentColor, mutedColor }: { title: string; focused: boolean; accentColor: string; mutedColor: string }) {
-  const scale = React.useRef(new Animated.Value(focused ? 1 : 0.9)).current;
+  const scale = React.useRef(new Animated.Value(focused ? 1 : 1)).current;
 
   React.useEffect(() => {
     Animated.spring(scale, {
-      toValue: focused ? 1 : 0.9,
+      toValue: 1,
       useNativeDriver: true,
       tension: 100,
       friction: 7,
@@ -35,8 +35,17 @@ function Label({ title, focused, accentColor, mutedColor }: { title: string; foc
   }, [focused]);
 
   return (
-    <Animated.View style={{ transform: [{ scale }], minWidth: 70, alignItems: 'center' }}>
-      <AppText numberOfLines={1} style={{ fontSize: 10, marginTop: 4, color: focused ? accentColor : mutedColor, fontWeight: '600', textAlign: 'center' }}>
+    <Animated.View style={{ transform: [{ scale }], minWidth: 82, alignItems: 'center' }}>
+      <AppText
+        numberOfLines={1}
+        style={{
+          fontSize: 14,
+          marginTop: 8,
+          color: focused ? accentColor : mutedColor,
+          fontWeight: focused ? '700' : '600',
+          textAlign: 'center',
+        }}
+      >
         {title}
       </AppText>
     </Animated.View>
@@ -45,8 +54,8 @@ function Label({ title, focused, accentColor, mutedColor }: { title: string; foc
 
 function TabIcon({ icon, title, focused, colors }: { icon: IconName; title: string; focused: boolean; colors: any }) {
   return (
-    <View style={{ alignItems: 'center', minWidth: 70 }}>
-      <Icon name={icon} size={24} color={focused ? colors.accent : colors.muted} />
+    <View style={{ alignItems: 'center', minWidth: 82 }}>
+      <Icon name={icon} size={28} color={focused ? colors.accent : colors.muted} strokeWidth={2.2} />
       <Label title={title} focused={focused} accentColor={colors.accent} mutedColor={colors.muted} />
     </View>
   );
@@ -85,19 +94,31 @@ function AddTabButton() {
     >
       <Animated.View
         style={[
-          styles.addButton,
+          styles.addButtonOuter,
           {
             transform: [{ scale }],
-            backgroundColor: colors.accent,
-            shadowColor: colors.accent,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.35,
-            shadowRadius: 10,
-            elevation: 10,
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderTopWidth: 3,
           },
         ]}
       >
-        <Icon name="plus" size={28} color="#FFF" strokeWidth={2.5} />
+        <View
+          style={[
+            styles.addButton,
+            {
+              backgroundColor: colors.accent,
+              shadowColor: colors.accent,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.55,
+              shadowRadius: 10,
+              elevation: 10,
+            },
+          ]}
+        >
+          <Icon name="plus" size={32} color="#FFF" strokeWidth={2.8} />
+        </View>
       </Animated.View>
     </Pressable>
   );
@@ -119,15 +140,22 @@ export default function AppTabs() {
         tabBarShowLabel: false,
         tabBarStyle: {
           backgroundColor: colors.surface,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: colors.border,
-          height: scaleHeight(90) + insets.bottom,
+          position: 'absolute',
+          left: 14,
+          right: 14,
+          bottom: 0,
+          borderTopWidth: 2,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.border,
+          height: scaleHeight(92) + insets.bottom,
           paddingBottom: insets.bottom,
-          paddingTop: scaleHeight(25),
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.08,
-          shadowRadius: 8,
-          elevation: 12,
+          paddingTop: scaleHeight(16),
+          borderRadius: 0,
+          shadowColor: '#000000',
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.12,
+          shadowRadius: 20,
+          elevation: 18,
         },
       }}
     >
@@ -166,7 +194,7 @@ export default function AppTabs() {
         component={ChartsScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon="chart" title="Charts" focused={focused} colors={colors} />
+            <TabIcon icon="analytics" title="Analytics" focused={focused} colors={colors} />
           ),
         }}
       />
@@ -185,14 +213,22 @@ export default function AppTabs() {
 
 const styles = StyleSheet.create({
   addTouchable: {
-    top: -16,
+    top: -44,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  addButtonOuter: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+  },
   addButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },

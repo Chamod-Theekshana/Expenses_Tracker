@@ -10,7 +10,9 @@ type Props = {
   disabled?: boolean;
   loading?: boolean;
   variant?: 'primary' | 'secondary' | 'ghost';
+  size?: 'sm' | 'md' | 'lg';
   style?: ViewStyle;
+  textStyle?: any;
 };
 
 export default function AppButton({
@@ -19,7 +21,9 @@ export default function AppButton({
   disabled,
   loading,
   variant = 'primary',
+  size = 'md',
   style,
+  textStyle,
 }: Props) {
   const { colors } = useContext(ThemeContext);
   const isDisabled = disabled || loading;
@@ -30,6 +34,8 @@ export default function AppButton({
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.base,
+        size === 'lg' && { height: 60 },
+        size === 'sm' && { height: 42, borderRadius: radius.sm },
         variant === 'primary' && {
           backgroundColor: colors.accent,
           borderColor: 'transparent',
@@ -51,9 +57,10 @@ export default function AppButton({
       ) : (
         <AppText
           style={[
-            { fontWeight: '700', fontSize: 16, color: '#FFFFFF' },
+            { fontWeight: '700', fontSize: size === 'lg' ? 18 : size === 'sm' ? 14 : 16, color: '#FFFFFF' },
             variant === 'secondary' && { color: colors.text },
             variant === 'ghost' && { color: colors.accent },
+            textStyle,
           ]}
         >
           {title}

@@ -1,4 +1,11 @@
-export type TransactionCategory = 'Food' | 'Transport' | 'Bills' | 'Shopping' | 'Income' | 'Other';
+export type TransactionCategory = string;
+
+export type TransactionSplit = {
+  id?: string;
+  category: string;
+  amount: number;
+  percentage: number;
+};
 
 export interface Transaction {
   id: string;
@@ -7,5 +14,8 @@ export interface Transaction {
   amount: number;
   currency: string;
   dateISO: string;
+  notes?: string | null;
+  tags?: string[];
   receiptUrl?: string | null;
+  splits?: TransactionSplit[];
 }

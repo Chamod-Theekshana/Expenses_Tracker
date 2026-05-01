@@ -6,4 +6,5 @@ export interface User {
   theme?: 'dark' | 'light';
   currency?: string;
   date_format?: string;
+  biometric_enabled?: boolean;
 }

@@ -9,6 +9,7 @@ import TransactionDetailScreen from '../views/app/TransactionDetailScreen';
 import CategoriesScreen from '../views/app/CategoriesScreen';
 import BudgetsScreen from '../views/app/BudgetsScreen';
 import RecurringScreen from '../views/app/RecurringScreen';
+import RemindersScreen from '../views/app/RemindersScreen';
 import Sidebar from '../components/Sidebar';
 import { ThemeContext } from '../store/theme';
 
@@ -20,6 +21,7 @@ export type AppStackParamList = {
   TxDetail: { tx: any };
   Categories: undefined;
   Budgets: undefined;
+  Reminders: undefined;
   Recurring: undefined;
   Goals: undefined;
 };
@@ -73,6 +75,14 @@ export default function AppStack() {
       <Stack.Screen
         name="Budgets"
         component={BudgetsScreen}
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+        }}
+      />
+      <Stack.Screen
+        name="Reminders"
+        component={RemindersScreen}
         options={{
           presentation: 'modal',
           animation: 'slide_from_bottom',

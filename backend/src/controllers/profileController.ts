@@ -28,14 +28,21 @@ export async function getProfile(req: AuthedRequest, res: Response) {
 
 export async function updateProfile(req: AuthedRequest, res: Response) {
   try {
-    const { name, profile_photo, theme, currency, date_format } = req.body;
+    const { name, profile_photo, theme, currency, date_format, biometric_enabled } = req.body;
     const requested = String(req.params.user_id);
     const userId = String(req.user!.id);
     if (requested !== userId) {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
-    const user = await UserModel.updateProfile(userId, { name, profile_photo, theme, currency, date_format });
+    const user = await UserModel.updateProfile(userId, {
+      name,
+      profile_photo,
+      theme,
+      currency,
+      date_format,
+      biometric_enabled,
+    });
     const { password, ...profile } = user;
 
     emitToUser(userId, 'profile:updated', { profile });

@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { View, StyleSheet, Alert, ActivityIndicator, Pressable, ScrollView, TextInput, SectionList } from 'react-native';
+import { View, StyleSheet, Alert, ActivityIndicator, Pressable, ScrollView, SectionList } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AppText from '../../components/AppText';
 import { spacing, radius } from '../../theme/colors';
@@ -7,12 +7,12 @@ import { TransactionsContext, Tx } from '../../store/transactions';
 import { DateFilterContext } from '../../store/dateFilter';
 import { AuthContext } from '../../store/auth';
 import Icon from '../../components/Icon';
-import IconButton from '../../components/IconButton';
 import { ThemeContext } from '../../store/theme';
 import { scaleHeight } from '../../constants/size';
 import { formatMoney } from '../../utils/money';
 import { getCategoryMeta } from '../../constants/categories';
 import DateFilterSheet from '../../components/DateFilterSheet';
+import { normalizeTag } from '../../utils/tags';
 
 const TYPE_FILTERS = ['All', 'Expense', 'Income'] as const;
 type TypeFilter = (typeof TYPE_FILTERS)[number];
@@ -21,13 +21,13 @@ export default function TransactionsScreen() {
   const navigation: any = useNavigation();
   const { items, removeTx, fetchTransactions } = useContext(TransactionsContext);
   const { userId } = useContext(AuthContext);
-  const { colors, theme } = useContext(ThemeContext);
+  const { colors } = useContext(ThemeContext);
   const { loading } = useContext(TransactionsContext);
-  const { matchesFilter, hasActiveFilter, filterLabel } = useContext(DateFilterContext);
+  const { matchesFilter, hasActiveFilter } = useContext(DateFilterContext);
 
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('All');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedTag, setSelectedTag] = useState<string>('');
   const [sortNewest, setSortNewest] = useState(true);
   const [isDateFilterVisible, setIsDateFilterVisible] = useState(false);
 
@@ -37,19 +37,45 @@ export default function TransactionsScreen() {
     }
   }, [userId, fetchTransactions]);
 
-  const categories = useMemo(() => {
-    return [...new Set(items.map((t) => t.category))].sort();
+  const availableTags = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    items.forEach((tx) => {
+      const uniqueTags = new Set(
+        (tx.tags || [])
+          .map((tag) => normalizeTag(String(tag || '')))
+          .filter((tag) => tag.length > 0),
+      );
+
+      uniqueTags.forEach((tag) => {
+        counts.set(tag, (counts.get(tag) || 0) + 1);
+      });
+    });
+
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([tag]) => tag);
   }, [items]);
 
   const filteredItems = useMemo(() => {
     let result = items.filter(t => matchesFilter(t.dateISO));
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      result = result.filter(t => t.title.toLowerCase().includes(q) || t.category.toLowerCase().includes(q));
+      result = result.filter((t) => {
+        const inTitle = t.title.toLowerCase().includes(q);
+        const inCategory = t.category.toLowerCase().includes(q);
+        const inSplitCategory = (t.splits || []).some((split) => split.category.toLowerCase().includes(q));
+        return inTitle || inCategory || inSplitCategory;
+      });
     }
     if (typeFilter === 'Expense') result = result.filter(t => t.amount < 0);
     else if (typeFilter === 'Income') result = result.filter(t => t.amount > 0);
-    if (selectedCategory) result = result.filter(t => t.category === selectedCategory);
+    if (selectedTag) {
+      result = result.filter((t) => {
+        const tags = (t.tags || []).map((tag) => normalizeTag(String(tag || '')));
+        return tags.includes(selectedTag);
+      });
+    }
 
     result.sort((a, b) => {
       const da = new Date(a.dateISO).getTime();
@@ -58,7 +84,7 @@ export default function TransactionsScreen() {
     });
 
     return result;
-  }, [items, search, typeFilter, selectedCategory, sortNewest, matchesFilter]);
+  }, [items, search, typeFilter, selectedTag, sortNewest, matchesFilter]);
 
   const groupedItems = useMemo(() => {
     const groups: { title: string; data: Tx[] }[] = [];
@@ -76,12 +102,12 @@ export default function TransactionsScreen() {
     return groups;
   }, [filteredItems]);
 
-  const hasFilters = search.trim().length > 0 || typeFilter !== 'All' || selectedCategory !== '' || hasActiveFilter;
+  const hasFilters = search.trim().length > 0 || typeFilter !== 'All' || selectedTag !== '' || hasActiveFilter;
 
   const clearFilters = () => {
     setSearch('');
     setTypeFilter('All');
-    setSelectedCategory('');
+    setSelectedTag('');
   };
 
   const handleDelete = async (id: string) => {
@@ -124,6 +150,45 @@ export default function TransactionsScreen() {
         </ScrollView>
       </View>
 
+      {availableTags.length > 0 ? (
+        <View style={styles.tagFilterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 20 }}>
+            <Pressable
+              onPress={() => setSelectedTag('')}
+              style={[
+                styles.chip,
+                { backgroundColor: selectedTag === '' ? colors.accent : colors.surface2, borderColor: colors.border },
+              ]}
+            >
+              <AppText style={{ fontWeight: '600', fontSize: 12, color: selectedTag === '' ? '#FFF' : colors.text }}>
+                All Tags
+              </AppText>
+            </Pressable>
+
+            {availableTags.map((tag) => {
+              const active = selectedTag === tag;
+              return (
+                <Pressable
+                  key={tag}
+                  onPress={() => setSelectedTag(active ? '' : tag)}
+                  style={[
+                    styles.chip,
+                    {
+                      backgroundColor: active ? colors.accent : colors.surface2,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <AppText style={{ fontWeight: '600', fontSize: 12, color: active ? '#FFF' : colors.text }}>
+                    #{tag}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+
       {loading ? (
         <View style={{ paddingTop: 30 }}>
           <ActivityIndicator color={colors.accent} />
@@ -134,7 +199,7 @@ export default function TransactionsScreen() {
         sections={groupedItems}
         keyExtractor={(item) => item.id}
         stickySectionHeadersEnabled={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: scaleHeight(160) }}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={() => (
           <View style={{ paddingTop: 30, alignItems: 'center' }}>
@@ -162,8 +227,15 @@ export default function TransactionsScreen() {
           const isFirst = index === 0;
           const isIncome = item.amount > 0;
           const cur = item.currency || 'LKR';
-          const catMeta = getCategoryMeta(item.category);
+          const splitCategories = (item.splits || []).map((split) => split.category).filter(Boolean);
+          const iconCategory = splitCategories.length > 0 ? splitCategories[0] : item.category;
+          const catMeta = getCategoryMeta(iconCategory);
           const timeStr = new Date(item.dateISO).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+          const categoryLabel = splitCategories.length > 0
+            ? `Split: ${splitCategories.slice(0, 2).join(', ')}${splitCategories.length > 2 ? '…' : ''}`
+            : item.category;
+          const tagsLabel = (item.tags || []).slice(0, 2).map((tag) => `#${normalizeTag(String(tag || ''))}`).filter((tag) => tag !== '#').join(' ');
+          const metaLabel = tagsLabel ? `${categoryLabel} • ${timeStr} • ${tagsLabel}` : `${categoryLabel} • ${timeStr}`;
 
           return (
             <View style={[
@@ -187,13 +259,13 @@ export default function TransactionsScreen() {
                   pressed && { opacity: 0.7 }
                 ]}
               >
-                <View style={[styles.txIcon, { backgroundColor: catMeta.color + '20' }]}>
-                  <Icon name={catMeta.icon} size={18} color={catMeta.color} />
+                <View style={[styles.txIcon, { backgroundColor: colors.accent + '15' }]}>
+                  <Icon name={catMeta.icon} size={20} color={colors.accent} />
                 </View>
                 <View style={styles.txInfo}>
                   <AppText style={{ fontWeight: '600', fontSize: 15, color: colors.text }}>{item.title}</AppText>
                   <AppText style={{ fontSize: 12, marginTop: 2, color: colors.muted }}>
-                    {item.category} • {timeStr}
+                    {metaLabel}
                   </AppText>
                 </View>
                 <AppText style={{ fontWeight: '700', fontSize: 15, color: isIncome ? colors.success : colors.danger }}>
@@ -238,7 +310,11 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 10,
+  },
+  tagFilterRow: {
+    flexDirection: 'row',
+    marginBottom: 14,
   },
   chip: {
     paddingHorizontal: 16,
@@ -268,9 +344,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   txIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,

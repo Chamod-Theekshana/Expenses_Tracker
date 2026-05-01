@@ -149,7 +149,7 @@ export default function AppTabs() {
           borderColor: colors.border,
           height: scaleHeight(92) + insets.bottom,
           paddingBottom: insets.bottom,
-          paddingTop: scaleHeight(16),
+          paddingTop: scaleHeight(30),
           borderRadius: 0,
           shadowColor: '#000000',
           shadowOffset: { width: 0, height: 10 },
@@ -213,7 +213,7 @@ export default function AppTabs() {
 
 const styles = StyleSheet.create({
   addTouchable: {
-    top: -44,
+    top: -60,
     justifyContent: 'center',
     alignItems: 'center',
   },

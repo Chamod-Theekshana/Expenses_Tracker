@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const TAG_REGEX = /^[a-z0-9][a-z0-9_-]{0,29}$/i;
 
 export function requireJson(req: Request, res: Response, next: NextFunction) {
   if (
@@ -26,13 +27,62 @@ export function validateNumericParam(paramName: string) {
 }
 
 export function validateTransactionBody(req: Request, res: Response, next: NextFunction) {
-  const { title, amount, category, created_at, dateISO } = req.body ?? {};
+  const { title, amount, category, created_at, dateISO, splits, notes, tags } = req.body ?? {};
 
   if (typeof title !== 'string' || title.trim().length < 1) {
     return res.status(400).json({ message: 'Title is required' });
   }
   if (title.trim().length > 200) {
     return res.status(400).json({ message: 'Title must be 200 characters or fewer' });
+  }
+
+  let normalizedNotes: string | undefined;
+  if (notes !== undefined) {
+    if (notes !== null && typeof notes !== 'string') {
+      return res.status(400).json({ message: 'notes must be a string' });
+    }
+    const cleanedNotes = notes === null ? '' : notes.trim();
+    if (cleanedNotes.length > 2000) {
+      return res.status(400).json({ message: 'notes must be 2000 characters or fewer' });
+    }
+    normalizedNotes = cleanedNotes;
+  }
+
+  let normalizedTags: string[] | undefined;
+  if (tags !== undefined) {
+    if (!Array.isArray(tags)) {
+      return res.status(400).json({ message: 'tags must be an array of strings' });
+    }
+    if (tags.length > 20) {
+      return res.status(400).json({ message: 'A maximum of 20 tags is allowed' });
+    }
+
+    const seenTags = new Set<string>();
+    const parsedTags: string[] = [];
+
+    for (let i = 0; i < tags.length; i++) {
+      const rawTag = tags[i];
+      if (typeof rawTag !== 'string') {
+        return res.status(400).json({ message: `Tag #${i + 1} must be a string` });
+      }
+
+      const cleanTag = rawTag.trim().replace(/^#+/, '').toLowerCase();
+      if (!cleanTag) {
+        return res.status(400).json({ message: `Tag #${i + 1} is empty` });
+      }
+      if (!TAG_REGEX.test(cleanTag)) {
+        return res.status(400).json({
+          message: `Tag #${i + 1} is invalid (use letters, numbers, _ or -; max 30 chars)`,
+        });
+      }
+
+      if (!seenTags.has(cleanTag)) {
+        seenTags.add(cleanTag);
+        parsedTags.push(cleanTag);
+      }
+    }
+
+    normalizedTags = parsedTags;
   }
 
   const numAmount = Number(amount);
@@ -46,7 +96,90 @@ export function validateTransactionBody(req: Request, res: Response, next: NextF
     return res.status(400).json({ message: 'Amount is too large' });
   }
 
-  if (typeof category !== 'string' || category.trim().length < 1) {
+  let normalizedCategory = typeof category === 'string' ? category.trim() : '';
+  let normalizedSplits: Array<{ category: string; amount: number; percentage: number }> | undefined;
+
+  if (splits !== undefined) {
+    if (!Array.isArray(splits)) {
+      return res.status(400).json({ message: 'splits must be an array' });
+    }
+
+    if (splits.length === 1) {
+      return res.status(400).json({ message: 'Split transactions require at least 2 categories' });
+    }
+
+    if (splits.length > 0 && numAmount >= 0) {
+      return res.status(400).json({ message: 'Splits are supported for expense transactions only' });
+    }
+
+    if (splits.length === 0) {
+      normalizedSplits = [];
+    } else {
+      const absTotal = Math.abs(numAmount);
+      let sumAmounts = 0;
+      const seenCategories = new Set<string>();
+      const parsed: Array<{ category: string; amount: number }> = [];
+
+      for (let i = 0; i < splits.length; i++) {
+        const row = (splits[i] ?? {}) as any;
+        const splitCategory = typeof row.category === 'string' ? row.category.trim() : '';
+        if (!splitCategory) {
+          return res.status(400).json({ message: `Split #${i + 1}: category is required` });
+        }
+        if (splitCategory.length > 255) {
+          return res.status(400).json({ message: `Split #${i + 1}: category is too long` });
+        }
+
+        const categoryKey = splitCategory.toLowerCase();
+        if (seenCategories.has(categoryKey)) {
+          return res.status(400).json({ message: 'Split categories must be unique' });
+        }
+        seenCategories.add(categoryKey);
+
+        const splitAmount = Number(row.amount);
+        if (!Number.isFinite(splitAmount) || splitAmount <= 0) {
+          return res.status(400).json({ message: `Split #${i + 1}: amount must be a positive number` });
+        }
+
+        const roundedAmount = Math.round(splitAmount * 100) / 100;
+        parsed.push({ category: splitCategory, amount: roundedAmount });
+        sumAmounts += roundedAmount;
+      }
+
+      const roundedSum = Math.round(sumAmounts * 100) / 100;
+      if (Math.abs(roundedSum - absTotal) > 0.05) {
+        return res.status(400).json({
+          message: 'Split amounts must add up to the total expense amount',
+        });
+      }
+
+      let allocatedAmount = 0;
+      let allocatedPercentage = 0;
+      normalizedSplits = parsed.map((split, index) => {
+        const isLast = index === parsed.length - 1;
+
+        const amountAbs = isLast
+          ? Math.round((absTotal - allocatedAmount) * 100) / 100
+          : split.amount;
+        const percentage = isLast
+          ? Math.round((100 - allocatedPercentage) * 100) / 100
+          : Math.round(((amountAbs / absTotal) * 100) * 100) / 100;
+
+        allocatedAmount = Math.round((allocatedAmount + amountAbs) * 100) / 100;
+        allocatedPercentage = Math.round((allocatedPercentage + percentage) * 100) / 100;
+
+        return {
+          category: split.category,
+          amount: -Math.abs(amountAbs),
+          percentage,
+        };
+      });
+
+      normalizedCategory = normalizedSplits[0]?.category || normalizedCategory;
+    }
+  }
+
+  if (!normalizedCategory) {
     return res.status(400).json({ message: 'Category is required' });
   }
 
@@ -67,14 +200,23 @@ export function validateTransactionBody(req: Request, res: Response, next: NextF
 
   // Normalize
   (req.body as any).title = title.trim();
-  (req.body as any).category = category.trim();
+  (req.body as any).category = normalizedCategory;
   (req.body as any).amount = numAmount;
+  if (normalizedNotes !== undefined) {
+    (req.body as any).notes = normalizedNotes;
+  }
+  if (normalizedTags !== undefined) {
+    (req.body as any).tags = normalizedTags;
+  }
+  if (normalizedSplits !== undefined) {
+    (req.body as any).splits = normalizedSplits;
+  }
 
   next();
 }
 
 export function validateProfileUpdateBody(req: Request, res: Response, next: NextFunction) {
-  const { name, profile_photo, theme, currency, date_format } = req.body ?? {};
+  const { name, profile_photo, theme, currency, date_format, biometric_enabled } = req.body ?? {};
 
   const allowedDateFormats = new Set(['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD']);
 
@@ -126,15 +268,22 @@ export function validateProfileUpdateBody(req: Request, res: Response, next: Nex
     }
   }
 
+  if (biometric_enabled !== undefined) {
+    if (typeof biometric_enabled !== 'boolean') {
+      return res.status(400).json({ message: 'biometric_enabled must be a boolean' });
+    }
+  }
+
   if (
     name === undefined &&
     profile_photo === undefined &&
     theme === undefined &&
     currency === undefined &&
-    date_format === undefined
+    date_format === undefined &&
+    biometric_enabled === undefined
   ) {
     return res.status(400).json({
-      message: 'At least one field (name, profile_photo, theme, currency, date_format) is required',
+      message: 'At least one field (name, profile_photo, theme, currency, date_format, biometric_enabled) is required',
     });
   }
 

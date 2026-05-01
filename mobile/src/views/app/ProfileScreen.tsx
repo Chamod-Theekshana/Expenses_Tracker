@@ -1,12 +1,12 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import * as ImagePicker from 'react-native-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppText from '../../components/AppText';
 import AppButton from '../../components/AppButton';
 import AppInput from '../../components/AppInput';
 import AppPicker from '../../components/AppPicker';
 import Card from '../../components/Card';
-import CloudinaryPhotoPicker from '../../components/CloudinaryPhotoPicker';
 import Icon, { type IconName } from '../../components/Icon';
 import { scaleHeight } from '../../constants/size';
 import { ProfileService } from '../../services/ProfileService';
@@ -14,6 +14,20 @@ import { AuthContext } from '../../store/auth';
 import { ProfileContext } from '../../store/profile';
 import { ThemeContext } from '../../store/theme';
 import { radius, spacing } from '../../theme/colors';
+import { getBiometricAvailability, promptForBiometricUnlock } from '../../services/biometricAuth';
+import { uploadImageToCloudinary } from '../../utils/cloudinary';
+
+const DEFAULT_DOB = 'February 12, 1998';
+const DEFAULT_GENDER = 'Male';
+const DEFAULT_CONTACT = '+94 71 216 0350';
+
+function splitProfileName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || '',
+    surname: parts.slice(1).join(' '),
+  };
+}
 
 export default function ProfileScreen({ navigation }: any) {
   const { userEmail, userId, signOut } = useContext(AuthContext);
@@ -28,23 +42,46 @@ export default function ProfileScreen({ navigation }: any) {
     updatePhoto,
     updateCurrency,
     updateDateFormat,
+    biometricEnabled,
+    updateBiometricEnabled,
   } = useContext(ProfileContext);
 
   const [manageVisible, setManageVisible] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [prefsVisible, setPrefsVisible] = useState(false);
 
-  const [nameDraft, setNameDraft] = useState('');
+  const [firstNameDraft, setFirstNameDraft] = useState('');
+  const [surnameDraft, setSurnameDraft] = useState('');
+  const [dobDraft, setDobDraft] = useState(DEFAULT_DOB);
+  const [genderDraft, setGenderDraft] = useState(DEFAULT_GENDER);
+  const [contactDraft, setContactDraft] = useState(DEFAULT_CONTACT);
+  const [savedDob, setSavedDob] = useState(DEFAULT_DOB);
+  const [savedGender, setSavedGender] = useState(DEFAULT_GENDER);
+  const [savedContact, setSavedContact] = useState(DEFAULT_CONTACT);
   const [savingName, setSavingName] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
+  const [savingBiometric, setSavingBiometric] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricLabel, setBiometricLabel] = useState('Biometrics');
 
   useEffect(() => {
-    setNameDraft(profileName || '');
+    const { firstName, surname } = splitProfileName(profileName || '');
+    setFirstNameDraft(firstName);
+    setSurnameDraft(surname);
   }, [profileName]);
+
+  useEffect(() => {
+    (async () => {
+      const availability = await getBiometricAvailability();
+      setBiometricAvailable(availability.available);
+      setBiometricLabel(availability.label);
+    })();
+  }, []);
 
   if (!userId) {
     return (
@@ -82,7 +119,45 @@ export default function ProfileScreen({ navigation }: any) {
     [],
   );
 
+  const genderOptions = useMemo(
+    () => [
+      { label: 'Male', value: 'Male' },
+      { label: 'Female', value: 'Female' },
+      { label: 'Other', value: 'Other' },
+      { label: 'Prefer not to say', value: 'Prefer not to say' },
+    ],
+    [],
+  );
+
   const themeOptions = useMemo(() => [{ label: 'Light Mode', value: 'light' }, { label: 'Dark Mode', value: 'dark' }], []);
+
+  const openManageProfile = () => {
+    const { firstName, surname } = splitProfileName(profileName || '');
+    setFirstNameDraft(firstName);
+    setSurnameDraft(surname);
+    setDobDraft(savedDob);
+    setGenderDraft(savedGender);
+    setContactDraft(savedContact);
+    setManageVisible(true);
+  };
+
+  const closeManageProfile = () => {
+    setManageVisible(false);
+    const { firstName, surname } = splitProfileName(profileName || '');
+    setFirstNameDraft(firstName);
+    setSurnameDraft(surname);
+    setDobDraft(savedDob);
+    setGenderDraft(savedGender);
+    setContactDraft(savedContact);
+  };
+
+  const joinedName = [firstNameDraft.trim(), surnameDraft.trim()].filter(Boolean).join(' ');
+  const hasNameChanged = joinedName !== (profileName || '').trim();
+  const hasMetaChanged =
+    dobDraft !== savedDob ||
+    genderDraft !== savedGender ||
+    contactDraft.trim() !== savedContact.trim();
+  const canSaveManageProfile = !!joinedName && !savingName && !uploadingPhoto && (hasNameChanged || hasMetaChanged);
 
   const closePasswordSheet = () => {
     setPasswordVisible(false);
@@ -93,17 +168,55 @@ export default function ProfileScreen({ navigation }: any) {
 
   const handleSaveName = async () => {
     try {
-      const next = nameDraft.trim();
+      const next = joinedName;
       if (!next) return Alert.alert('Name required', 'Please enter a name.');
       setSavingName(true);
-      await updateName(userId, next);
-      Alert.alert('Updated', 'Name updated successfully');
+
+      if (hasNameChanged) {
+        await updateName(userId, next);
+      }
+
+      setSavedDob(dobDraft);
+      setSavedGender(genderDraft);
+      setSavedContact(contactDraft.trim());
+
+      Alert.alert('Updated', 'Profile updated successfully');
       setManageVisible(false);
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to update name');
     } finally {
       setSavingName(false);
     }
+  };
+
+  const pickAndUploadPhoto = () => {
+    ImagePicker.launchImageLibrary(
+      {
+        mediaType: 'photo',
+        selectionLimit: 1,
+        quality: 0.85 as ImagePicker.PhotoQuality,
+      },
+      async response => {
+        if (response.didCancel) return;
+        if (response.errorCode) {
+          Alert.alert('Error', response.errorMessage || 'Image picker error');
+          return;
+        }
+
+        const uri = response.assets?.[0]?.uri;
+        if (!uri) return;
+
+        try {
+          setUploadingPhoto(true);
+          const url = await uploadImageToCloudinary(uri);
+          await handlePhotoUploaded(url);
+        } catch (e: any) {
+          Alert.alert('Upload failed', e?.message || 'Could not upload image');
+        } finally {
+          setUploadingPhoto(false);
+        }
+      },
+    );
   };
 
   const handlePhotoUploaded = async (url: string) => {
@@ -135,6 +248,37 @@ export default function ProfileScreen({ navigation }: any) {
       Alert.alert('Error', e?.message || 'Failed to update password');
     } finally {
       setSavingPassword(false);
+    }
+  };
+
+  const handleBiometricToggle = async (nextValue: boolean) => {
+    if (savingBiometric) {
+      return;
+    }
+
+    try {
+      if (nextValue) {
+        const availability = await getBiometricAvailability();
+        setBiometricAvailable(availability.available);
+        setBiometricLabel(availability.label);
+
+        if (!availability.available) {
+          Alert.alert('Unavailable', 'Biometric authentication is not available on this device.');
+          return;
+        }
+
+        const granted = await promptForBiometricUnlock(`Enable ${availability.label} app lock`);
+        if (!granted) {
+          return;
+        }
+      }
+
+      setSavingBiometric(true);
+      await updateBiometricEnabled(userId, nextValue);
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to update biometric setting');
+    } finally {
+      setSavingBiometric(false);
     }
   };
 
@@ -178,7 +322,7 @@ export default function ProfileScreen({ navigation }: any) {
         {
           title: 'Manage Profile',
           icon: 'profile' as const,
-          onPress: () => setManageVisible(true),
+          onPress: openManageProfile,
         },
         {
           title: 'Password & Security',
@@ -248,7 +392,7 @@ export default function ProfileScreen({ navigation }: any) {
         },
       ] satisfies Row[],
     }),
-    [displayCurrency, displayDateFormat, displayLanguage, displayTheme, signOut, theme],
+    [displayCurrency, displayDateFormat, displayLanguage, displayTheme, openManageProfile, signOut, theme],
   );
 
   const RowItem = ({ title, icon, rightText, danger, onPress, isLast }: Row & { isLast: boolean }) => {
@@ -321,7 +465,7 @@ export default function ProfileScreen({ navigation }: any) {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 18, 28) }]}
+        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 18, scaleHeight(160)) }]}
       >
         <Card elevated style={[styles.userCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.userRow}>
@@ -378,24 +522,101 @@ export default function ProfileScreen({ navigation }: any) {
         </Card>
       </ScrollView>
 
-      <BottomSheet visible={manageVisible} title="Manage Profile" onClose={() => setManageVisible(false)}>
-        <View style={{ alignItems: 'center', marginBottom: 14 }}>
-          <CloudinaryPhotoPicker value={profilePhoto} onChange={handlePhotoUploaded} />
+      <Modal visible={manageVisible} animationType="slide" onRequestClose={closeManageProfile}>
+        <View style={[styles.manageContainer, { backgroundColor: colors.bg, paddingTop: insets.top + 8 }]}>
+          <View style={styles.manageHeader}>
+            <Pressable onPress={closeManageProfile} hitSlop={12} style={styles.manageHeaderSide}>
+              <Icon name="arrow-left" size={28} color={colors.text} strokeWidth={2.4} />
+            </Pressable>
+            <AppText style={[styles.manageHeaderTitle, { color: colors.text }]}>Manage Profile</AppText>
+            <View style={styles.manageHeaderSide} />
+          </View>
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[
+              styles.manageContent,
+              { paddingBottom: Math.max(insets.bottom + 28, scaleHeight(100)) },
+            ]}
+          >
+            <View style={styles.manageAvatarWrap}>
+              <View style={[styles.manageAvatar, { borderColor: colors.accent, backgroundColor: colors.surface }]}>
+                {profilePhoto ? (
+                  <Image source={{ uri: profilePhoto }} style={styles.manageAvatarImage} />
+                ) : (
+                  <Icon name="profile" size={48} color={colors.muted} />
+                )}
+
+                {uploadingPhoto && (
+                  <View style={styles.manageAvatarLoading}>
+                    <ActivityIndicator color="#FFFFFF" />
+                  </View>
+                )}
+              </View>
+
+              <Pressable
+                onPress={pickAndUploadPhoto}
+                disabled={uploadingPhoto}
+                style={({ pressed }) => [
+                  styles.manageAvatarEdit,
+                  { backgroundColor: colors.accent, opacity: pressed || uploadingPhoto ? 0.78 : 1 },
+                ]}
+              >
+                <Icon name="edit" size={20} color="#FFFFFF" strokeWidth={2.4} />
+              </Pressable>
+            </View>
+
+            <AppText style={[styles.manageLabel, { color: colors.textSecondary }]}>First Name</AppText>
+            <AppInput
+              placeholder="Enter first name"
+              value={firstNameDraft}
+              onChangeText={setFirstNameDraft}
+              autoCapitalize="words"
+            />
+
+            <AppText style={[styles.manageLabel, { color: colors.textSecondary }]}>Surname</AppText>
+            <AppInput
+              placeholder="Enter surname"
+              value={surnameDraft}
+              onChangeText={setSurnameDraft}
+              autoCapitalize="words"
+            />
+
+            <AppText style={[styles.manageLabel, { color: colors.textSecondary }]}>Date of Birth</AppText>
+            <AppInput
+              value={dobDraft}
+              editable={false}
+              right={<Icon name="calendar" size={22} color={colors.text} strokeWidth={2.1} />}
+            />
+
+            <AppText style={[styles.manageLabel, { color: colors.textSecondary }]}>Gender</AppText>
+            <AppPicker
+              options={genderOptions}
+              value={genderDraft}
+              onValueChange={setGenderDraft}
+              style={{ backgroundColor: colors.surface, borderColor: colors.border }}
+            />
+
+            <AppText style={[styles.manageLabel, { color: colors.textSecondary }]}>Contact No.</AppText>
+            <AppInput
+              placeholder="Enter contact number"
+              value={contactDraft}
+              onChangeText={setContactDraft}
+              keyboardType="phone-pad"
+            />
+          </ScrollView>
+
+          <View style={[styles.manageSaveWrap, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+            <AppButton
+              title={savingName ? 'Saving Changes...' : 'Save Changes'}
+              loading={savingName}
+              onPress={handleSaveName}
+              disabled={!canSaveManageProfile}
+              size="lg"
+            />
+          </View>
         </View>
-
-        <AppText muted style={styles.fieldLabel}>
-          Display Name
-        </AppText>
-        <AppInput placeholder="Enter your name" value={nameDraft} onChangeText={setNameDraft} />
-
-        <View style={{ height: 14 }} />
-        <AppButton
-          title={savingName ? 'Saving...' : 'Save'}
-          loading={savingName}
-          onPress={handleSaveName}
-          disabled={savingName || nameDraft.trim() === (profileName || '').trim()}
-        />
-      </BottomSheet>
+      </Modal>
 
       <BottomSheet visible={passwordVisible} title="Password & Security" onClose={closePasswordSheet}>
         <AppText muted style={styles.fieldLabel}>
@@ -414,6 +635,26 @@ export default function ProfileScreen({ navigation }: any) {
           Confirm New Password
         </AppText>
         <AppInput placeholder="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry />
+
+        <View style={{ height: 16 }} />
+        <View style={[styles.securityRow, { backgroundColor: colors.surface2, borderColor: colors.border }]}>
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <AppText style={[styles.securityTitle, { color: colors.text }]}>Biometric App Lock</AppText>
+            <AppText muted style={styles.securityHint}>
+              {biometricAvailable
+                ? `Require ${biometricLabel} when returning to the app.`
+                : 'Biometric authentication is unavailable on this device.'}
+            </AppText>
+          </View>
+
+          <Switch
+            value={biometricEnabled}
+            onValueChange={handleBiometricToggle}
+            disabled={savingBiometric || (!biometricAvailable && !biometricEnabled)}
+            trackColor={{ false: colors.border, true: colors.accent + '45' }}
+            thumbColor={biometricEnabled ? colors.accent : colors.muted}
+          />
+        </View>
 
         <View style={{ height: 16 }} />
         <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -596,5 +837,93 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     marginBottom: 8,
+  },
+  securityRow: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  securityTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  securityHint: {
+    marginTop: 2,
+    fontSize: 11.5,
+    lineHeight: 16,
+  },
+  manageContainer: {
+    flex: 1,
+  },
+  manageHeader: {
+    height: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    marginBottom: 6,
+  },
+  manageHeaderSide: {
+    width: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  manageHeaderTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  manageContent: {
+    paddingHorizontal: spacing.lg,
+  },
+  manageAvatarWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    marginBottom: 24,
+  },
+  manageAvatar: {
+    width: 182,
+    height: 182,
+    borderRadius: 91,
+    borderWidth: 2,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  manageAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  manageAvatarEdit: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 85,
+    bottom: -2,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  manageAvatarLoading: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  manageLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  manageSaveWrap: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: 12,
   },
 });

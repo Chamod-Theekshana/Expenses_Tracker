@@ -1,5 +1,5 @@
 import React, { useContext, useMemo, useState } from 'react';
-import { Alert, StyleSheet, View, Image, Pressable, ActivityIndicator, Modal } from 'react-native';
+import { Alert, StyleSheet, View, Image, Pressable, ActivityIndicator, Modal, TextInput } from 'react-native';
 import * as ImagePicker from 'react-native-image-picker';
 import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
@@ -13,6 +13,8 @@ import { TransactionsContext, Tx } from '../../store/transactions';
 import { AuthContext } from '../../store/auth';
 import { uploadImageToCloudinary } from '../../utils/cloudinary';
 import { radius } from '../../theme/colors';
+import { scaleHeight } from '../../constants/size';
+import { mergeTags, parseTagInput } from '../../utils/tags';
 
 export default function TransactionDetailScreen({ route, navigation }: any) {
   const { tx }: { tx: Tx } = route.params;
@@ -24,12 +26,16 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
   const [amountRaw, setAmountRaw] = useState(String(Math.abs(tx.amount)));
   const [category, setCategory] = useState(tx.category);
   const [dateISO, setDateISO] = useState(tx.dateISO?.slice(0, 10) || new Date().toISOString().slice(0, 10));
+  const [notes, setNotes] = useState(tx.notes || '');
+  const [tags, setTags] = useState<string[]>(mergeTags([], tx.tags || []));
+  const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
 
   const [receiptUri, setReceiptUri] = useState<string | null>(tx.receiptUrl || null);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(tx.receiptUrl || null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const hasSplits = (tx.splits?.length || 0) > 0;
 
   const isIncome = tx.amount > 0;
   const amount = useMemo(() => {
@@ -39,6 +45,45 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
 
   const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(dateISO);
   const canSave = title.trim().length >= 2 && amount > 0 && dateOk && userId;
+
+  const buildUpdatedSplits = () => {
+    if (!hasSplits) return undefined;
+
+    const originalSplits = (tx.splits || []).filter((split) => String(split.category || '').trim().length > 0);
+    if (originalSplits.length < 2) {
+      return undefined;
+    }
+
+    const totalAbs = amount;
+    const absAmounts = originalSplits.map((split) => Math.abs(Number(split.amount) || 0));
+    const weightsTotal = absAmounts.reduce((sum, value) => sum + value, 0);
+
+    const normalizedBase = absAmounts.map((value) => {
+      if (weightsTotal <= 0) return totalAbs / originalSplits.length;
+      return (totalAbs * value) / weightsTotal;
+    });
+
+    let allocated = 0;
+    let allocatedPct = 0;
+    return originalSplits.map((split, index) => {
+      const isLast = index === originalSplits.length - 1;
+      const nextAmount = isLast
+        ? Math.round((totalAbs - allocated) * 100) / 100
+        : Math.round(normalizedBase[index] * 100) / 100;
+      const nextPct = isLast
+        ? Math.round((100 - allocatedPct) * 100) / 100
+        : Math.round(((nextAmount / totalAbs) * 100) * 100) / 100;
+
+      allocated = Math.round((allocated + nextAmount) * 100) / 100;
+      allocatedPct = Math.round((allocatedPct + nextPct) * 100) / 100;
+
+      return {
+        category: String(split.category || '').trim(),
+        amount: nextAmount,
+        percentage: nextPct,
+      };
+    });
+  };
 
   const pickReceipt = () => {
     Alert.alert('Attach Receipt', 'Choose source', [
@@ -66,11 +111,59 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
     }
   };
 
+  const addTagsFromInput = () => {
+    const parsed = parseTagInput(tagInput);
+    if (parsed.length === 0) {
+      if (tagInput.trim().length > 0) {
+        Alert.alert('Invalid tag', 'Use tags like #food, #travel, #salary.');
+      }
+      setTagInput('');
+      return;
+    }
+
+    setTags((prev) => mergeTags(prev, parsed));
+    setTagInput('');
+  };
+
+  const removeTag = (value: string) => {
+    setTags((prev) => prev.filter((tag) => tag !== value));
+  };
+
   const save = async () => {
     if (!canSave) { Alert.alert('Missing info', 'Check title, amount and date.'); return; }
+    if (hasSplits && isIncome) {
+      Alert.alert('Invalid split transaction', 'Split transactions are supported for expenses only.');
+      return;
+    }
     try {
       setSaving(true);
-      await updateTx(tx.id, { title: title.trim(), category: category.trim() || 'Other', amount: isIncome ? amount : -amount, currency: tx.currency || 'LKR', dateISO, receiptUrl: receiptUrl || null }, userId!);
+      const splitPayload = buildUpdatedSplits();
+      const effectiveCategory = splitPayload?.[0]?.category || category.trim() || 'Other';
+      const finalTags = mergeTags(tags, parseTagInput(tagInput));
+      const cleanedNotes = notes.trim();
+
+      if (tagInput.trim().length > 0) {
+        setTagInput('');
+      }
+      if (finalTags.length !== tags.length) {
+        setTags(finalTags);
+      }
+
+      await updateTx(
+        tx.id,
+        {
+          title: title.trim(),
+          category: effectiveCategory,
+          amount: isIncome ? amount : -amount,
+          currency: tx.currency || 'LKR',
+          dateISO,
+          notes: cleanedNotes.length > 0 ? cleanedNotes : null,
+          tags: finalTags,
+          receiptUrl: receiptUrl || null,
+          splits: splitPayload,
+        },
+        userId!,
+      );
       navigation.goBack();
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to update');
@@ -89,7 +182,8 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
   };
 
   return (
-    <Screen preset="scroll" padded contentContainerStyle={{ paddingBottom: 40 }}>
+    <Screen preset="scroll" padded contentContainerStyle={{paddingBottom: scaleHeight(40),
+ }}>
       <View style={styles.topRow}>
         <AppText title>Transaction</AppText>
         <IconButton icon="x" onPress={() => navigation.goBack()} accessibilityLabel="Close" />
@@ -103,10 +197,72 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
         <AppInput value={amountRaw} onChangeText={setAmountRaw} keyboardType="decimal-pad" />
         <View style={{ height: 16 }} />
         <AppText muted style={{ marginBottom: 10, fontSize: 13 }}>Category</AppText>
-        <AppInput value={category} onChangeText={setCategory} />
+        <AppInput value={category} onChangeText={setCategory} editable={!hasSplits} />
+        {hasSplits && (
+          <AppText muted style={{ marginTop: 8, fontSize: 12 }}>
+            This transaction uses split categories. Category is managed by split rows.
+          </AppText>
+        )}
         <View style={{ height: 16 }} />
         <AppText muted style={{ marginBottom: 10, fontSize: 13 }}>Date (YYYY-MM-DD)</AppText>
         <AppInput value={dateISO} onChangeText={setDateISO} />
+
+        <View style={{ height: 16 }} />
+        <AppText muted style={{ marginBottom: 10, fontSize: 13 }}>Notes (optional)</AppText>
+        <View style={[styles.notesWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <TextInput
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Add details about this transaction"
+            placeholderTextColor={colors.muted}
+            multiline
+            maxLength={2000}
+            textAlignVertical="top"
+            style={[styles.notesInput, { color: colors.text }]}
+          />
+        </View>
+
+        <View style={{ height: 16 }} />
+        <AppText muted style={{ marginBottom: 10, fontSize: 13 }}>Tags (optional)</AppText>
+        <View style={styles.tagInputRow}>
+          <View style={{ flex: 1 }}>
+            <AppInput
+              value={tagInput}
+              onChangeText={setTagInput}
+              placeholder="#food #weekend"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={addTagsFromInput}
+            />
+          </View>
+          <Pressable
+            onPress={addTagsFromInput}
+            style={[styles.tagAddBtn, { backgroundColor: colors.surface2, borderColor: colors.border }]}
+          >
+            <Icon name="plus" size={16} color={colors.accent} />
+          </Pressable>
+        </View>
+
+        {tags.length > 0 ? (
+          <View style={styles.tagsWrap}>
+            {tags.map((tag) => (
+              <Pressable
+                key={tag}
+                onPress={() => removeTag(tag)}
+                style={[styles.tagChip, { backgroundColor: colors.accent + '15', borderColor: colors.accent + '55' }]}
+              >
+                <Icon name="tag" size={12} color={colors.accent} />
+                <AppText style={{ marginLeft: 6, marginRight: 6, color: colors.accent, fontSize: 12, fontWeight: '700' }}>
+                  #{tag}
+                </AppText>
+                <Icon name="x" size={12} color={colors.accent} />
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <AppText muted style={styles.tagsHint}>Add hashtags for easier filtering later.</AppText>
+        )}
 
         {/* Receipt Section */}
         <View style={{ height: 18 }} />
@@ -164,6 +320,49 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
 
 const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  notesWrap: {
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    minHeight: 110,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  notesInput: {
+    fontSize: 14,
+    lineHeight: 20,
+    minHeight: 90,
+  },
+  tagInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  tagAddBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tagsWrap: {
+    marginTop: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  tagsHint: {
+    marginTop: 8,
+    fontSize: 12,
+  },
   receiptPicker: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 52, borderRadius: radius.md, borderWidth: 1, borderStyle: 'dashed' },
   receiptPreview: { height: 180, borderRadius: radius.md, overflow: 'hidden', borderWidth: 1, position: 'relative' },
   receiptImg: { width: '100%', height: '100%' },

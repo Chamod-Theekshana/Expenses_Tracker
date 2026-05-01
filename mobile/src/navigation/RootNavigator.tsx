@@ -1,4 +1,5 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { AppState, Modal, StyleSheet, View } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 
 import { AuthContext } from '../store/auth';
@@ -10,21 +11,44 @@ import AuthStack from './AuthStack';
 import AppStack from './AppStack';
 import SplashScreen from '../views/SplashScreen';
 import { ProfileService } from '../services/ProfileService';
+import { promptForBiometricUnlock } from '../services/biometricAuth';
 
 import { NotificationsProvider, NotificationsContext } from '../store/notifications';
 import NotificationBanner from '../components/NotificationBanner';
+import AppText from '../components/AppText';
+import AppButton from '../components/AppButton';
+import Icon from '../components/Icon';
 import { connectSocket, disconnectSocket, onEvent, offEvent } from '../services/socketService';
 import { initPushForLoggedInUser, listenForegroundPush } from '../services/PushNotificationService';
 
 function RootNavigatorInner() {
-  const { userEmail, isLoading, userId, token } = useContext(AuthContext);
+  const { userEmail, isLoading, userId, token, signOut } = useContext(AuthContext);
   const { fetchTransactions, clearTransactions } = useContext(TransactionsContext);
-  const { loadProfile, clearProfile } = useContext(ProfileContext);
+  const { loadProfile, clearProfile, biometricEnabled } = useContext(ProfileContext);
   const { setTheme, colors } = useContext(ThemeContext);
   const { show } = useContext(NotificationsContext);
 
   const [showSplash, setShowSplash] = useState(true);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [isAppLocked, setIsAppLocked] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+
+  const appStateRef = useRef(AppState.currentState);
+  const unlockTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialLockAttemptedRef = useRef(false);
+
+  const unlockWithBiometrics = useCallback(async () => {
+    if (isUnlocking) {
+      return;
+    }
+
+    setIsUnlocking(true);
+    const success = await promptForBiometricUnlock('Unlock PulseSpend');
+    if (success) {
+      setIsAppLocked(false);
+    }
+    setIsUnlocking(false);
+  }, [isUnlocking]);
 
   // Clear data on logout
   useEffect(() => {
@@ -34,6 +58,49 @@ function RootNavigatorInner() {
       setDataLoaded(false);
     }
   }, [userId, clearProfile, clearTransactions]);
+
+  useEffect(() => {
+    if (!userId || !biometricEnabled) {
+      setIsAppLocked(false);
+    }
+  }, [userId, biometricEnabled]);
+
+  useEffect(() => {
+    if (!userId || !biometricEnabled) {
+      return;
+    }
+
+    const subscription = AppState.addEventListener('change', nextState => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      const returnedToForeground =
+        (previousState === 'background' || previousState === 'inactive') && nextState === 'active';
+
+      if (!returnedToForeground) {
+        return;
+      }
+
+      setIsAppLocked(true);
+
+      if (unlockTimeoutRef.current) {
+        clearTimeout(unlockTimeoutRef.current);
+      }
+
+      unlockTimeoutRef.current = setTimeout(() => {
+        unlockTimeoutRef.current = null;
+        unlockWithBiometrics();
+      }, 220);
+    });
+
+    return () => {
+      subscription.remove();
+      if (unlockTimeoutRef.current) {
+        clearTimeout(unlockTimeoutRef.current);
+        unlockTimeoutRef.current = null;
+      }
+    };
+  }, [biometricEnabled, unlockWithBiometrics, userId]);
 
   // Load initial data when authenticated
   useEffect(() => {
@@ -54,6 +121,34 @@ function RootNavigatorInner() {
       })();
     }
   }, [userId, dataLoaded, fetchTransactions, loadProfile, setTheme]);
+
+  // On cold start (initial load) if biometric lock is enabled, lock the app
+  useEffect(() => {
+    if (!userId || !biometricEnabled || !dataLoaded) return;
+
+    // ensure this runs only once per app process start
+    if (initialLockAttemptedRef.current) return;
+    initialLockAttemptedRef.current = true;
+
+    setIsAppLocked(true);
+
+    // give UI a short moment to render modal, then prompt biometrics
+    if (unlockTimeoutRef.current) {
+      clearTimeout(unlockTimeoutRef.current);
+    }
+
+    unlockTimeoutRef.current = setTimeout(() => {
+      unlockTimeoutRef.current = null;
+      unlockWithBiometrics();
+    }, 220);
+
+    return () => {
+      if (unlockTimeoutRef.current) {
+        clearTimeout(unlockTimeoutRef.current);
+        unlockTimeoutRef.current = null;
+      }
+    };
+  }, [userId, biometricEnabled, dataLoaded, unlockWithBiometrics]);
 
   // FCM Push notifications
   useEffect(() => {
@@ -133,6 +228,15 @@ function RootNavigatorInner() {
       }
     };
 
+    const onReminderDue = (payload: any) => {
+      if (payload?.title || payload?.body) {
+        show({
+          title: payload?.title || 'Bill Reminder',
+          body: payload?.body || 'A bill reminder is due soon.',
+        });
+      }
+    };
+
     onEvent('tx:new', onNewTx);
     onEvent('tx:updated', onUpdatedTx);
     onEvent('tx:deleted', onDeletedTx);
@@ -142,6 +246,7 @@ function RootNavigatorInner() {
     onEvent('budget:deleted', onBudgetDeleted);
     onEvent('budget:alert', onBudgetAlert);
     onEvent('goal:completed', onGoalCompleted);
+    onEvent('reminder:due', onReminderDue);
 
     return () => {
       offEvent('tx:new', onNewTx);
@@ -153,6 +258,7 @@ function RootNavigatorInner() {
     offEvent('budget:deleted', onBudgetDeleted);
     offEvent('budget:alert', onBudgetAlert);
       offEvent('goal:completed', onGoalCompleted);
+      offEvent('reminder:due', onReminderDue);
       disconnectSocket();
     };
   }, [userId, token, dataLoaded, fetchTransactions, loadProfile, setTheme, show]);
@@ -185,6 +291,41 @@ function RootNavigatorInner() {
     <NavigationContainer theme={navTheme}>
       <NotificationBanner />
       {userEmail ? <AppStack /> : <AuthStack />}
+
+      {userEmail && biometricEnabled ? (
+        <Modal visible={isAppLocked} transparent animationType="fade" onRequestClose={() => {}}>
+          <View style={styles.lockOverlay}>
+            <View style={[styles.lockCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+              <View style={[styles.lockIconWrap, { backgroundColor: colors.accent + '18' }]}>
+                <Icon name="lock" size={24} color={colors.accent} />
+              </View>
+
+              <AppText style={[styles.lockTitle, { color: colors.text }]}>App Locked</AppText>
+              <AppText muted style={styles.lockMessage}>
+                Authenticate with biometrics to continue.
+              </AppText>
+
+              <View style={{ width: '100%', marginTop: 16 }}>
+                <AppButton
+                  title={isUnlocking ? 'Checking...' : 'Unlock with Biometrics'}
+                  loading={isUnlocking}
+                  onPress={unlockWithBiometrics}
+                  disabled={isUnlocking}
+                />
+              </View>
+
+              <View style={{ width: '100%', marginTop: 10 }}>
+                <AppButton
+                  title="Sign Out"
+                  variant="secondary"
+                  onPress={signOut}
+                  disabled={isUnlocking}
+                />
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </NavigationContainer>
   );
 }
@@ -196,3 +337,39 @@ export default function RootNavigator() {
     </NotificationsProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  lockOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.58)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  lockCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 22,
+  },
+  lockIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  lockTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  lockMessage: {
+    textAlign: 'center',
+    fontSize: 13,
+  },
+});

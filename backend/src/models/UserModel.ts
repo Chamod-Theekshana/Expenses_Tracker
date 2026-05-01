@@ -9,6 +9,7 @@ export interface User {
   theme?: 'dark' | 'light' | string | null;
   currency?: string | null;
   date_format?: string | null;
+  biometric_enabled?: boolean | null;
   created_at?: Date;
 }
 
@@ -44,6 +45,7 @@ export class UserModel {
       theme?: string;
       currency?: string;
       date_format?: string;
+      biometric_enabled?: boolean;
     }
   ): Promise<User> {
     const hasAny =
@@ -51,7 +53,8 @@ export class UserModel {
       updates.profile_photo !== undefined ||
       updates.theme !== undefined ||
       updates.currency !== undefined ||
-      updates.date_format !== undefined;
+      updates.date_format !== undefined ||
+      updates.biometric_enabled !== undefined;
 
     if (!hasAny) {
       const result = await sql`SELECT * FROM users WHERE id = ${userId}`;
@@ -65,7 +68,8 @@ export class UserModel {
         profile_photo = COALESCE(${updates.profile_photo ?? null}, profile_photo),
         theme = COALESCE(${updates.theme ?? null}, theme),
         currency = COALESCE(${updates.currency ?? null}, currency),
-        date_format = COALESCE(${updates.date_format ?? null}, date_format)
+        date_format = COALESCE(${updates.date_format ?? null}, date_format),
+        biometric_enabled = COALESCE(${updates.biometric_enabled ?? null}, biometric_enabled)
       WHERE id = ${userId}
       RETURNING *
     `;

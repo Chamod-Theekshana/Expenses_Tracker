@@ -1,4 +1,4 @@
-import { Transaction } from '../models/Transaction';
+import { Transaction, TransactionSplit } from '../models/Transaction';
 import { apiFetch } from './http';
 
 export class TransactionService {
@@ -11,7 +11,21 @@ export class TransactionService {
       amount: Number(tx.amount),
       currency: tx.currency || 'LKR',
       dateISO: tx.created_at,
+      notes: tx.notes ?? null,
+      tags: Array.isArray(tx.tags)
+        ? tx.tags
+            .map((tag: any) => String(tag || '').trim().replace(/^#+/, '').toLowerCase())
+            .filter((tag: string) => tag.length > 0)
+        : [],
       receiptUrl: tx.receipt_url || null,
+      splits: Array.isArray(tx.splits)
+        ? tx.splits.map((split: any) => ({
+            id: split.id != null ? String(split.id) : undefined,
+            category: String(split.category || ''),
+            amount: Number(split.amount),
+            percentage: Number(split.percentage),
+          }))
+        : [],
     }));
   }
 
@@ -23,10 +37,37 @@ export class TransactionService {
     dateISO?: string,
     currency?: string,
     receiptUrl?: string | null,
+    splits?: TransactionSplit[],
+    notes?: string | null,
+    tags?: string[],
   ): Promise<void> {
+    const payload: any = {
+      title,
+      amount,
+      category,
+      dateISO,
+      currency: currency || 'LKR',
+      receipt_url: receiptUrl || null,
+    };
+
+    if (notes !== undefined) {
+      payload.notes = notes;
+    }
+    if (tags !== undefined) {
+      payload.tags = tags;
+    }
+
+    if (splits !== undefined) {
+      payload.splits = splits.map((split) => ({
+        category: split.category,
+        amount: split.amount,
+        percentage: split.percentage,
+      }));
+    }
+
     await apiFetch(`/api/transaction`, {
       method: 'POST',
-      body: JSON.stringify({ title, amount, category, dateISO, currency: currency || 'LKR', receipt_url: receiptUrl || null }),
+      body: JSON.stringify(payload),
     });
   }
 
@@ -38,10 +79,37 @@ export class TransactionService {
     dateISO?: string,
     currency?: string,
     receiptUrl?: string | null,
+    splits?: TransactionSplit[],
+    notes?: string | null,
+    tags?: string[],
   ): Promise<void> {
+    const payload: any = {
+      title,
+      amount,
+      category,
+      dateISO,
+      currency: currency || 'LKR',
+      receipt_url: receiptUrl,
+    };
+
+    if (notes !== undefined) {
+      payload.notes = notes;
+    }
+    if (tags !== undefined) {
+      payload.tags = tags;
+    }
+
+    if (splits !== undefined) {
+      payload.splits = splits.map((split) => ({
+        category: split.category,
+        amount: split.amount,
+        percentage: split.percentage,
+      }));
+    }
+
     await apiFetch(`/api/transaction/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ title, amount, category, dateISO, currency: currency || 'LKR', receipt_url: receiptUrl }),
+      body: JSON.stringify(payload),
     });
   }
 

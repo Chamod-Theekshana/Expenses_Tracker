@@ -1,5 +1,5 @@
 import React, { useContext, useState } from 'react';
-import { View, StyleSheet, Pressable, Modal, ScrollView } from 'react-native';
+import { View, StyleSheet, Pressable, Modal, ScrollView, type ViewStyle } from 'react-native';
 import AppText from './AppText';
 import { ThemeContext } from '../store/theme';
 import { radius } from '../theme/colors';
@@ -14,9 +14,10 @@ type Props = {
   value: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
+  style?: ViewStyle | ViewStyle[];
 };
 
-export default function AppPicker({ options, value, onValueChange, placeholder }: Props) {
+export default function AppPicker({ options, value, onValueChange, placeholder, style }: Props) {
   const { colors } = useContext(ThemeContext);
   const [visible, setVisible] = useState(false);
   const selected = options.find(o => o.value === value);
@@ -24,7 +25,7 @@ export default function AppPicker({ options, value, onValueChange, placeholder }
   return (
     <>
       <Pressable
-        style={[styles.picker, { backgroundColor: colors.surface2, borderColor: colors.border }]}
+        style={[styles.picker, { backgroundColor: colors.surface2, borderColor: colors.border }, style]}
         onPress={() => setVisible(true)}
       >
         <AppText style={{ color: selected ? colors.text : colors.muted, flex: 1 }}>
@@ -70,7 +71,7 @@ export default function AppPicker({ options, value, onValueChange, placeholder }
 const styles = StyleSheet.create({
   picker: {
     height: 52,
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     borderWidth: 1,
     paddingHorizontal: 16,
     flexDirection: 'row',

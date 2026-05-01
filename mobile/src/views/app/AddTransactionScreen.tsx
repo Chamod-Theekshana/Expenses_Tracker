@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { View, StyleSheet, Alert, Pressable, Image, ActivityIndicator, ScrollView } from 'react-native';
+import { View, StyleSheet, Alert, Pressable, Image, ActivityIndicator, ScrollView, TextInput } from 'react-native';
 import * as ImagePicker from 'react-native-image-picker';
 import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
@@ -10,15 +10,44 @@ import Chip from '../../components/Chip';
 import IconButton from '../../components/IconButton';
 import { getCategoryMeta } from '../../constants/categories';
 import { radius, spacing } from '../../theme/colors';
-import { TransactionsContext } from '../../store/transactions';
+import { TransactionsContext, TxSplit } from '../../store/transactions';
 import { AuthContext } from '../../store/auth';
 import { scaleHeight } from '../../constants/size';
 import { ThemeContext } from '../../store/theme';
 import { ProfileContext } from '../../store/profile';
 import { CategoryService, Category } from '../../services/CategoryService';
 import { uploadImageToCloudinary } from '../../utils/cloudinary';
+import { mergeTags, parseTagInput } from '../../utils/tags';
 
 const fallbackExpenseCategories = ['Food', 'Transport', 'Bills', 'Shopping', 'Other'];
+
+type SplitDraft = {
+  id: string;
+  category: string;
+  amountRaw: string;
+};
+
+const round2 = (value: number) => Math.round(value * 100) / 100;
+
+function buildDefaultSplitRows(categories: string[], totalAmount: number): SplitDraft[] {
+  const base = categories.length ? categories : fallbackExpenseCategories;
+  const firstCategory = base[0] || 'Food';
+  const secondCategory = base[1] || base[0] || 'Other';
+
+  if (totalAmount > 0) {
+    const firstAmount = round2(totalAmount / 2);
+    const secondAmount = round2(totalAmount - firstAmount);
+    return [
+      { id: 'split-1', category: firstCategory, amountRaw: String(firstAmount) },
+      { id: 'split-2', category: secondCategory, amountRaw: String(secondAmount) },
+    ];
+  }
+
+  return [
+    { id: 'split-1', category: firstCategory, amountRaw: '' },
+    { id: 'split-2', category: secondCategory, amountRaw: '' },
+  ];
+}
 
 export default function AddTransactionScreen({ navigation }: any) {
   const { addTx } = useContext(TransactionsContext);
@@ -39,6 +68,11 @@ export default function AddTransactionScreen({ navigation }: any) {
 
   const [catLoading, setCatLoading] = useState(false);
   const [cats, setCats] = useState<Category[]>([]);
+  const [splitEnabled, setSplitEnabled] = useState(false);
+  const [splitRows, setSplitRows] = useState<SplitDraft[]>([]);
+  const [notes, setNotes] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -61,8 +95,106 @@ export default function AddTransactionScreen({ navigation }: any) {
     return Number.isFinite(n) ? n : 0;
   }, [amountRaw]);
 
+  const expenseCategories = useMemo(() => {
+    const dynamic = cats
+      .filter((c) => c.type === 'expense' || c.type === 'both')
+      .map((c) => c.name);
+    return dynamic.length ? dynamic : fallbackExpenseCategories;
+  }, [cats]);
+
+  useEffect(() => {
+    if (isIncome && splitEnabled) {
+      setSplitEnabled(false);
+      setSplitRows([]);
+    }
+  }, [isIncome, splitEnabled]);
+
+  const splitPreview = useMemo(() => {
+    const parsed = splitRows.map((row) => {
+      const amountNum = Number(row.amountRaw);
+      const amountAbs = Number.isFinite(amountNum) && amountNum > 0 ? round2(amountNum) : 0;
+      return {
+        ...row,
+        category: row.category.trim(),
+        amountAbs,
+      };
+    });
+
+    const allocated = round2(parsed.reduce((sum, row) => sum + row.amountAbs, 0));
+    const target = round2(amount);
+    const remaining = round2(target - allocated);
+
+    const duplicateCategorySet = new Set<string>();
+    let hasDuplicateCategory = false;
+    for (const row of parsed) {
+      const key = row.category.toLowerCase();
+      if (!key) continue;
+      if (duplicateCategorySet.has(key)) {
+        hasDuplicateCategory = true;
+        break;
+      }
+      duplicateCategorySet.add(key);
+    }
+
+    const hasMissingCategory = parsed.some((row) => row.category.length === 0);
+    const hasInvalidAmount = parsed.some((row) => row.amountAbs <= 0);
+    const hasEnoughRows = parsed.length >= 2;
+    const isTotalMatching = Math.abs(remaining) <= 0.01;
+
+    const percentages = parsed.map((row) => (target > 0 ? round2((row.amountAbs / target) * 100) : 0));
+
+    let splitPayload: TxSplit[] = [];
+    if (hasEnoughRows && !hasMissingCategory && !hasInvalidAmount && !hasDuplicateCategory && isTotalMatching && target > 0) {
+      let runningAmount = 0;
+      let runningPercentage = 0;
+
+      splitPayload = parsed.map((row, index) => {
+        const isLast = index === parsed.length - 1;
+        const amountAbs = isLast ? round2(target - runningAmount) : row.amountAbs;
+        const percentage = isLast
+          ? round2(100 - runningPercentage)
+          : round2((amountAbs / target) * 100);
+
+        runningAmount = round2(runningAmount + amountAbs);
+        runningPercentage = round2(runningPercentage + percentage);
+
+        return {
+          category: row.category,
+          amount: amountAbs,
+          percentage,
+        };
+      });
+    }
+
+    const isValid = hasEnoughRows && !hasMissingCategory && !hasInvalidAmount && !hasDuplicateCategory && isTotalMatching && target > 0;
+
+    return {
+      percentages,
+      allocated,
+      target,
+      remaining,
+      hasEnoughRows,
+      hasDuplicateCategory,
+      hasMissingCategory,
+      hasInvalidAmount,
+      isTotalMatching,
+      isValid,
+      splitPayload,
+    };
+  }, [splitRows, amount]);
+
+  const splitErrorMessage = useMemo(() => {
+    if (!splitEnabled) return '';
+    if (!splitPreview.hasEnoughRows) return 'Add at least two split rows.';
+    if (splitPreview.hasMissingCategory) return 'Each split row needs a category.';
+    if (splitPreview.hasDuplicateCategory) return 'Split categories must be unique.';
+    if (splitPreview.hasInvalidAmount) return 'Each split row needs a positive amount.';
+    if (!splitPreview.isTotalMatching) return 'Split amounts must add up to the full expense amount.';
+    return '';
+  }, [splitEnabled, splitPreview]);
+
   const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(dateISO);
-  const canSave = title.trim().length >= 2 && amount > 0 && userId && dateOk;
+  const canSave = title.trim().length >= 2 && amount > 0 && userId && dateOk && (!splitEnabled || splitPreview.isValid);
 
   const pickReceipt = () => {
     Alert.alert('Attach Receipt', 'Choose source', [
@@ -103,21 +235,95 @@ export default function AddTransactionScreen({ navigation }: any) {
     }
   };
 
+  const toggleSplitMode = () => {
+    if (splitEnabled) {
+      setSplitEnabled(false);
+      setSplitRows([]);
+      return;
+    }
+
+    setSplitEnabled(true);
+    setSplitRows((prev) => (prev.length > 0 ? prev : buildDefaultSplitRows(expenseCategories, amount)));
+  };
+
+  const addSplitRow = () => {
+    const fallbackCategory = expenseCategories.find(
+      (c) => !splitRows.some((row) => row.category.trim().toLowerCase() === c.trim().toLowerCase()),
+    ) || 'Other';
+
+    setSplitRows((prev) => [
+      ...prev,
+      {
+        id: `split-${Date.now()}-${prev.length + 1}`,
+        category: fallbackCategory,
+        amountRaw: '',
+      },
+    ]);
+  };
+
+  const updateSplitCategory = (id: string, value: string) => {
+    setSplitRows((prev) => prev.map((row) => (row.id === id ? { ...row, category: value } : row)));
+  };
+
+  const updateSplitAmount = (id: string, value: string) => {
+    setSplitRows((prev) => prev.map((row) => (row.id === id ? { ...row, amountRaw: value } : row)));
+  };
+
+  const removeSplitRow = (id: string) => {
+    setSplitRows((prev) => prev.filter((row) => row.id !== id));
+  };
+
+  const addTagsFromInput = () => {
+    const parsed = parseTagInput(tagInput);
+    if (parsed.length === 0) {
+      if (tagInput.trim().length > 0) {
+        Alert.alert('Invalid tag', 'Use tags like #food, #travel, #salary.');
+      }
+      setTagInput('');
+      return;
+    }
+
+    setTags((prev) => mergeTags(prev, parsed));
+    setTagInput('');
+  };
+
+  const removeTag = (value: string) => {
+    setTags((prev) => prev.filter((tag) => tag !== value));
+  };
+
   const save = async () => {
     if (!canSave) {
-      Alert.alert('Missing info', 'Enter a title and amount.');
+      if (splitEnabled && splitErrorMessage) {
+        Alert.alert('Fix split allocation', splitErrorMessage);
+      } else {
+        Alert.alert('Missing info', 'Enter a title and amount.');
+      }
       return;
     }
     try {
       setSaving(true);
+      const splitPayload = splitEnabled ? splitPreview.splitPayload : undefined;
+      const finalTags = mergeTags(tags, parseTagInput(tagInput));
+      const cleanedNotes = notes.trim();
+
+      if (tagInput.trim().length > 0) {
+        setTagInput('');
+      }
+      if (finalTags.length !== tags.length) {
+        setTags(finalTags);
+      }
+
       await addTx(
         {
           title: title.trim(),
-          category: isIncome ? 'Income' : category,
+          category: isIncome ? 'Income' : splitPayload?.[0]?.category || category,
           amount: isIncome ? amount : -amount,
           currency: preferredCurrency || 'LKR',
           dateISO,
+          notes: cleanedNotes.length > 0 ? cleanedNotes : null,
+          tags: finalTags,
           receiptUrl: receiptUrl || null,
+          splits: splitPayload,
         },
         userId!,
       );
@@ -201,6 +407,67 @@ export default function AddTransactionScreen({ navigation }: any) {
 
           <View style={{ height: 16 }} />
 
+          <AppText muted style={styles.label}>Notes (optional)</AppText>
+          <View style={[styles.notesWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <TextInput
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Add details about this transaction"
+              placeholderTextColor={colors.muted}
+              multiline
+              maxLength={2000}
+              textAlignVertical="top"
+              style={[styles.notesInput, { color: colors.text }]}
+            />
+          </View>
+
+          <View style={{ height: 16 }} />
+
+          <AppText muted style={styles.label}>Tags (optional)</AppText>
+          <View style={styles.tagInputRow}>
+            <View style={{ flex: 1 }}>
+              <AppInput
+                value={tagInput}
+                onChangeText={setTagInput}
+                placeholder="#food #weekend"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="done"
+                onSubmitEditing={addTagsFromInput}
+              />
+            </View>
+            <Pressable
+              onPress={addTagsFromInput}
+              style={[styles.tagAddBtn, { backgroundColor: colors.surface2, borderColor: colors.border }]}
+            >
+              <Icon name="plus" size={16} color={colors.accent} />
+            </Pressable>
+          </View>
+
+          {tags.length > 0 ? (
+            <View style={styles.tagsWrap}>
+              {tags.map((tag) => (
+                <Pressable
+                  key={tag}
+                  onPress={() => removeTag(tag)}
+                  style={[styles.tagChip, { backgroundColor: colors.accent + '15', borderColor: colors.accent + '55' }]}
+                >
+                  <Icon name="tag" size={12} color={colors.accent} />
+                  <AppText style={{ marginLeft: 6, marginRight: 6, color: colors.accent, fontSize: 12, fontWeight: '700' }}>
+                    #{tag}
+                  </AppText>
+                  <Icon name="x" size={12} color={colors.accent} />
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <AppText muted style={styles.tagsHint}>
+              Add hashtags for easier filtering later.
+            </AppText>
+          )}
+
+          <View style={{ height: 16 }} />
+
           <AppText muted style={styles.label}>Date</AppText>
           <View style={styles.dateRow}>
             <Chip 
@@ -229,41 +496,156 @@ export default function AddTransactionScreen({ navigation }: any) {
           {!isIncome ? (
             <>
               <View style={{ height: 24 }} />
-              <AppText muted style={styles.label}>Category</AppText>
-              <View style={styles.catWrap}>
-                {(cats.length
-                  ? cats
-                      .filter((c) => c.type === 'expense' || c.type === 'both')
-                      .map((c) => c.name)
-                  : fallbackExpenseCategories
-                ).map((c) => {
-                  const meta = getCategoryMeta(c);
-                  const isActive = category === c;
-                  return (
-                    <Pressable
-                      key={c}
-                      onPress={() => setCategory(c)}
-                      style={[
-                        styles.catPill,
-                        {
-                          backgroundColor: isActive ? meta.color : colors.surface2,
-                          borderColor: isActive ? meta.color : colors.border,
-                        },
-                      ]}
-                    >
-                      <Icon name={meta.icon} size={14} color={isActive ? '#FFF' : meta.color} />
-                      <AppText style={{ fontSize: 13, fontWeight: '600', marginLeft: 6, color: isActive ? '#FFF' : colors.text }}>
-                        {c}
-                      </AppText>
-                    </Pressable>
-                  );
-                })}
+              <View style={styles.splitHeaderRow}>
+                <AppText muted style={[styles.label, { marginBottom: 0 }]}>Category</AppText>
+                <Pressable
+                  onPress={toggleSplitMode}
+                  style={[
+                    styles.splitToggle,
+                    {
+                      backgroundColor: splitEnabled ? colors.accent + '20' : colors.surface2,
+                      borderColor: splitEnabled ? colors.accent : colors.border,
+                    },
+                  ]}
+                >
+                  <Icon name="activity" size={14} color={splitEnabled ? colors.accent : colors.muted} />
+                  <AppText
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 12,
+                      fontWeight: '700',
+                      color: splitEnabled ? colors.accent : colors.text,
+                    }}
+                  >
+                    {splitEnabled ? 'Split On' : 'Split'}
+                  </AppText>
+                </Pressable>
               </View>
-              {!cats.length && !catLoading ? (
-                <AppText muted style={{ marginTop: 8, fontSize: 12 }}>
-                  Using built-in categories.
-                </AppText>
-              ) : null}
+
+              {!splitEnabled ? (
+                <>
+                  <View style={styles.catWrap}>
+                    {expenseCategories.map((c) => {
+                      const meta = getCategoryMeta(c);
+                      const isActive = category === c;
+                      return (
+                        <Pressable
+                          key={c}
+                          onPress={() => setCategory(c)}
+                          style={[
+                            styles.catPill,
+                            {
+                              backgroundColor: isActive ? meta.color : colors.surface2,
+                              borderColor: isActive ? meta.color : colors.border,
+                            },
+                          ]}
+                        >
+                          <Icon name={meta.icon} size={14} color={isActive ? '#FFF' : meta.color} />
+                          <AppText style={{ fontSize: 13, fontWeight: '600', marginLeft: 6, color: isActive ? '#FFF' : colors.text }}>
+                            {c}
+                          </AppText>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  {!cats.length && !catLoading ? (
+                    <AppText muted style={{ marginTop: 8, fontSize: 12 }}>
+                      Using built-in categories.
+                    </AppText>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <AppText muted style={styles.splitHint}>
+                    Allocate this expense across categories by amount.
+                  </AppText>
+
+                  <View style={styles.splitRowsWrap}>
+                    {splitRows.map((row, index) => (
+                      <View
+                        key={row.id}
+                        style={[
+                          styles.splitCard,
+                          {
+                            backgroundColor: colors.surface2,
+                            borderColor: colors.border,
+                          },
+                        ]}
+                      >
+                        <View style={styles.splitCardTopRow}>
+                          <AppText style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>
+                            Split {index + 1}
+                          </AppText>
+                          <View style={styles.splitCardRightRow}>
+                            <AppText style={{ fontSize: 12, color: colors.muted }}>
+                              {splitPreview.percentages[index]?.toFixed(1) || '0.0'}%
+                            </AppText>
+                            <Pressable
+                              onPress={() => removeSplitRow(row.id)}
+                              disabled={splitRows.length <= 2}
+                              style={[
+                                styles.splitRemove,
+                                { backgroundColor: splitRows.length <= 2 ? colors.border : colors.danger + '20' },
+                              ]}
+                            >
+                              <Icon
+                                name="trash"
+                                size={14}
+                                color={splitRows.length <= 2 ? colors.muted : colors.danger}
+                              />
+                            </Pressable>
+                          </View>
+                        </View>
+
+                        <View style={{ height: 10 }} />
+                        <AppText muted style={styles.splitFieldLabel}>Category</AppText>
+                        <AppInput
+                          value={row.category}
+                          onChangeText={(value) => updateSplitCategory(row.id, value)}
+                          placeholder="e.g. Food"
+                        />
+
+                        <View style={{ height: 10 }} />
+                        <AppText muted style={styles.splitFieldLabel}>Amount</AppText>
+                        <AppInput
+                          value={row.amountRaw}
+                          onChangeText={(value) => updateSplitAmount(row.id, value)}
+                          keyboardType="decimal-pad"
+                          placeholder="0.00"
+                          left={
+                            <AppText style={{ fontSize: 13, fontWeight: '700', color: colors.muted }}>
+                              {preferredCurrency || 'LKR'}
+                            </AppText>
+                          }
+                        />
+                      </View>
+                    ))}
+                  </View>
+
+                  <Pressable
+                    onPress={addSplitRow}
+                    style={[styles.addSplitBtn, { borderColor: colors.border, backgroundColor: colors.surface2 }]}
+                  >
+                    <Icon name="plus" size={16} color={colors.accent} />
+                    <AppText style={{ marginLeft: 8, color: colors.accent, fontSize: 13, fontWeight: '700' }}>
+                      Add Split
+                    </AppText>
+                  </Pressable>
+
+                  <AppText muted style={styles.splitSummary}>
+                    Allocated {preferredCurrency || 'LKR'} {splitPreview.allocated.toFixed(2)} / {splitPreview.target.toFixed(2)}
+                  </AppText>
+                  {splitErrorMessage ? (
+                    <AppText style={[styles.splitError, { color: colors.danger }]}>
+                      {splitErrorMessage}
+                    </AppText>
+                  ) : (
+                    <AppText muted style={styles.splitSummarySecondary}>
+                      Remaining {preferredCurrency || 'LKR'} {Math.max(0, splitPreview.remaining).toFixed(2)}
+                    </AppText>
+                  )}
+                </>
+              )}
             </>
           ) : null}
 
@@ -358,6 +740,63 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     height: 60,
   },
+  notesWrap: {
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    minHeight: 110,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  notesInput: {
+    fontSize: 14,
+    lineHeight: 20,
+    minHeight: 90,
+  },
+  tagInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  tagAddBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tagsWrap: {
+    marginTop: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  tagsHint: {
+    marginTop: 8,
+    fontSize: 12,
+  },
+  splitHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  splitToggle: {
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   catWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -375,6 +814,63 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
+  },
+  splitHint: {
+    marginBottom: 10,
+    fontSize: 12,
+  },
+  splitRowsWrap: {
+    gap: 10,
+  },
+  splitCard: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+  },
+  splitCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  splitCardRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  splitRemove: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  splitFieldLabel: {
+    fontSize: 12,
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  addSplitBtn: {
+    marginTop: 10,
+    height: 42,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  splitSummary: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  splitSummarySecondary: {
+    marginTop: 4,
+    fontSize: 12,
+  },
+  splitError: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: '600',
   },
   receiptPicker: {
     flexDirection: 'row',

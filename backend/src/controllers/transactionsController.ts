@@ -52,6 +52,26 @@ async function checkBudgetAlert(userId: string, category: string): Promise<void>
   }
 }
 
+function getExpenseCategoriesForBudgetChecks(
+  amount: number,
+  fallbackCategory: string,
+  splits?: Array<{ category: string }>,
+): string[] {
+  if (amount >= 0) return [];
+
+  if (splits && splits.length > 0) {
+    const unique = new Set(
+      splits
+        .map((split) => String(split.category || '').trim())
+        .filter((category) => category.length > 0),
+    );
+    if (unique.size > 0) return Array.from(unique);
+  }
+
+  const cleanFallback = String(fallbackCategory || '').trim();
+  return cleanFallback ? [cleanFallback] : [];
+}
+
 export async function getTransactionByUserId(req: AuthedRequest, res: Response) {
   try {
     const requested = String(req.params.user_id);
@@ -69,7 +89,7 @@ export async function getTransactionByUserId(req: AuthedRequest, res: Response) 
 
 export async function createTransaction(req: AuthedRequest, res: Response) {
   try {
-    const { title, amount, category, created_at, currency, receipt_url } = req.body;
+    const { title, amount, category, created_at, currency, receipt_url, splits, notes, tags } = req.body;
     const user_id = String(req.user!.id);
 
     const transaction = await TransactionModel.create(
@@ -79,7 +99,10 @@ export async function createTransaction(req: AuthedRequest, res: Response) {
       category,
       created_at,
       currency,
-      receipt_url || null
+      receipt_url || null,
+      splits,
+      notes,
+      tags,
     );
 
     emitToUser(user_id, 'tx:new', {
@@ -89,8 +112,13 @@ export async function createTransaction(req: AuthedRequest, res: Response) {
     });
     emitToUser(user_id, 'tx:summary:invalidate', { user_id });
 
-    if (Number(transaction.amount) < 0) {
-      await checkBudgetAlert(user_id, category);
+    const affectedCategories = getExpenseCategoriesForBudgetChecks(
+      Number(transaction.amount),
+      String(transaction.category || category),
+      transaction.splits,
+    );
+    for (const affectedCategory of affectedCategories) {
+      await checkBudgetAlert(user_id, affectedCategory);
     }
 
     return res.status(201).json({ message: 'Transaction created successfully', transaction });
@@ -193,7 +221,7 @@ export async function updateTransaction(req: AuthedRequest, res: Response) {
   try {
     const id = String(req.params.id);
     const authed = String(req.user!.id);
-    const { title, amount, category, created_at, currency, receipt_url } = req.body;
+    const { title, amount, category, created_at, currency, receipt_url, splits, notes, tags } = req.body;
 
     const tx = await TransactionModel.updateByUser(
       id,
@@ -203,7 +231,10 @@ export async function updateTransaction(req: AuthedRequest, res: Response) {
       category,
       created_at,
       currency,
-      receipt_url !== undefined ? receipt_url : undefined
+      receipt_url !== undefined ? receipt_url : undefined,
+      splits,
+      notes,
+      tags,
     );
 
     if (!tx) return res.status(404).json({ message: 'Transaction not found' });
@@ -215,8 +246,13 @@ export async function updateTransaction(req: AuthedRequest, res: Response) {
     });
     emitToUser(authed, 'tx:summary:invalidate', { user_id: authed });
 
-    if (Number(tx.amount) < 0) {
-      await checkBudgetAlert(authed, category);
+    const affectedCategories = getExpenseCategoriesForBudgetChecks(
+      Number(tx.amount),
+      String(tx.category || category),
+      tx.splits,
+    );
+    for (const affectedCategory of affectedCategories) {
+      await checkBudgetAlert(authed, affectedCategory);
     }
 
     return res.json({ message: 'Transaction updated successfully', transaction: tx });

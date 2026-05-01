@@ -6,6 +6,7 @@ type ProfileState = {
   profilePhoto: string | null;
   currency: string;
   dateFormat: string;
+  biometricEnabled: boolean;
   isLoading: boolean;
 };
 
@@ -15,6 +16,7 @@ type ProfileContextValue = ProfileState & {
   updatePhoto: (userId: string, photo: string) => Promise<void>;
   updateCurrency: (userId: string, currency: string) => Promise<void>;
   updateDateFormat: (userId: string, dateFormat: string) => Promise<void>;
+  updateBiometricEnabled: (userId: string, enabled: boolean) => Promise<void>;
   clearProfile: () => void;
 };
 
@@ -23,12 +25,14 @@ export const ProfileContext = createContext<ProfileContextValue>({
   profilePhoto: null,
   currency: 'USD',
   dateFormat: 'DD/MM/YYYY',
+  biometricEnabled: false,
   isLoading: false,
   loadProfile: async () => {},
   updateName: async () => {},
   updatePhoto: async () => {},
   updateCurrency: async () => {},
   updateDateFormat: async () => {},
+  updateBiometricEnabled: async () => {},
   clearProfile: () => {},
 });
 
@@ -37,6 +41,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [currency, setCurrency] = useState('USD');
   const [dateFormat, setDateFormat] = useState('DD/MM/YYYY');
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const loadProfile = useCallback(async (userId: string) => {
@@ -47,6 +52,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       setProfilePhoto(profile.profilePhoto || null);
       setCurrency(profile.currency || 'USD');
       setDateFormat(profile.date_format || 'DD/MM/YYYY');
+      setBiometricEnabled(Boolean((profile as any).biometric_enabled));
     } catch (error) {
       console.error('[Profile] Failed to load profile:', error);
     } finally {
@@ -74,11 +80,17 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     setDateFormat(newDateFormat);
   }, []);
 
+  const updateBiometricEnabled = useCallback(async (userId: string, enabled: boolean) => {
+    await ProfileService.updateProfile(userId, { biometric_enabled: enabled });
+    setBiometricEnabled(enabled);
+  }, []);
+
   const clearProfile = useCallback(() => {
     setName('');
     setProfilePhoto(null);
     setCurrency('USD');
     setDateFormat('DD/MM/YYYY');
+    setBiometricEnabled(false);
   }, []);
 
   const value = useMemo(
@@ -87,15 +99,31 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       profilePhoto,
       currency,
       dateFormat,
+      biometricEnabled,
       isLoading,
       loadProfile,
       updateName,
       updatePhoto,
       updateCurrency,
       updateDateFormat,
+      updateBiometricEnabled,
       clearProfile,
     }),
-    [name, profilePhoto, currency, dateFormat, isLoading, loadProfile, updateName, updatePhoto, updateCurrency, updateDateFormat, clearProfile],
+    [
+      name,
+      profilePhoto,
+      currency,
+      dateFormat,
+      biometricEnabled,
+      isLoading,
+      loadProfile,
+      updateName,
+      updatePhoto,
+      updateCurrency,
+      updateDateFormat,
+      updateBiometricEnabled,
+      clearProfile,
+    ],
   );
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;

@@ -19,6 +19,7 @@ import notificationRoutes from './routes/notificationRoutes';
 import categoriesRoutes from './routes/categoriesRoutes';
 import budgetsRoutes from './routes/budgetsRoutes';
 import recurringRoutes from './routes/recurringRoutes';
+import remindersRoutes from './routes/remindersRoutes';
 import goalsRoutes from './routes/goalsRoutes';
 import exchangeRateRoutes from './routes/exchangeRateRoutes';
 import otpRoutes from './routes/otpRoutes';
@@ -26,6 +27,7 @@ import otpRoutes from './routes/otpRoutes';
 import { initSocket } from './socket';
 import { startRecurringScheduler } from './services/recurringScheduler';
 import { GoalReminderService } from './services/GoalReminderService';
+import { BillReminderScheduler } from './services/billReminderScheduler';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -68,6 +70,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/budgets', budgetsRoutes);
 app.use('/api/recurring', recurringRoutes);
+app.use('/api/reminders', remindersRoutes);
 app.use('/api/goals', goalsRoutes);
 app.use('/api/exchange-rates', exchangeRateRoutes);
 
@@ -83,6 +86,8 @@ initDB()
   .then(async () => {
     await startRecurringScheduler();
     GoalReminderService.startDailyReminders();
+    BillReminderScheduler.startDailyReminders();
+    await BillReminderScheduler.checkAndSendReminders();
     server.listen(PORT, () => {
       console.log(`[Server] Running on port ${PORT}`);
     });

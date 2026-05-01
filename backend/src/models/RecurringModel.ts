@@ -5,6 +5,7 @@ export type RecurringRow = {
   user_id: string;
   title: string;
   amount: number;
+  currency?: string;
   category: string;
   frequency: string;
   next_run: string;

@@ -1,6 +1,13 @@
 import React, { createContext, useCallback, useMemo, useState } from 'react';
 import { TransactionService } from '../services/TransactionService';
 
+export type TxSplit = {
+  id?: string;
+  category: string;
+  amount: number;
+  percentage: number;
+};
+
 export type Tx = {
   id: string;
   title: string;
@@ -8,7 +15,10 @@ export type Tx = {
   amount: number;
   currency: string;
   dateISO: string;
+  notes?: string | null;
+  tags?: string[];
   receiptUrl?: string | null;
+  splits?: TxSplit[];
 };
 
 type Ctx = {
@@ -63,6 +73,9 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
         tx.dateISO,
         tx.currency,
         tx.receiptUrl,
+        tx.splits,
+        tx.notes,
+        tx.tags,
       );
       // Refresh to get server-assigned ID and confirmed data
       await fetchTransactions(userId);
@@ -80,6 +93,9 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
         tx.dateISO,
         tx.currency,
         tx.receiptUrl,
+        tx.splits,
+        tx.notes,
+        tx.tags,
       );
       await fetchTransactions(userId);
     },

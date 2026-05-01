@@ -20,7 +20,7 @@ import Icon from '../../components/Icon';
 import { getCategoryMeta } from '../../constants/categories';
 import { BudgetService, BudgetStatus } from '../../services/BudgetService';
 import { ExchangeRateService } from '../../services/ExchangeRateService';
-import { RecurringService, RecurringRule } from '../../services/RecurringService';
+import { ReminderItem, ReminderService } from '../../services/ReminderService';
 import { GoalService, Goal } from '../../services/GoalService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -89,7 +89,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const [budgets, setBudgets] = useState<BudgetStatus[]>([]);
   const [rates, setRates] = useState<Record<string, number>>({});
-  const [upcomingBills, setUpcomingBills] = useState<RecurringRule[]>([]);
+  const [upcomingBills, setUpcomingBills] = useState<ReminderItem[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
 
   const [isNotificationsVisible, setIsNotificationsVisible] = useState(false);
@@ -135,10 +135,10 @@ export default function HomeScreen({ navigation }: any) {
     } catch { /* keep previous */ }
 
     try {
-      const rules = await RecurringService.list();
-      const active = rules
-        .filter(r => r.is_active)
-        .sort((a, b) => new Date(a.next_run).getTime() - new Date(b.next_run).getTime())
+      const reminders = await ReminderService.list();
+      const active = reminders
+        .filter((r) => r.is_active)
+        .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
         .slice(0, 4);
       setUpcomingBills(active);
     } catch { /* keep previous */ }
@@ -251,8 +251,21 @@ export default function HomeScreen({ navigation }: any) {
     filteredItems
       .filter(t => t.amount < 0)
       .forEach(t => {
+        const txCurrency = t.currency || preferredCurrency;
+        const splitRows = (t.splits || []).filter(split => Number(split.amount) < 0);
+
+        if (splitRows.length > 0) {
+          splitRows.forEach((split) => {
+            const cat = split.category || 'Other';
+            const converted = convertAmount(Math.abs(Number(split.amount)), txCurrency);
+            totals[cat] = (totals[cat] || 0) + converted;
+            totalExpense += converted;
+          });
+          return;
+        }
+
         const cat = t.category || 'Other';
-        const converted = convertAmount(Math.abs(t.amount), t.currency || preferredCurrency);
+        const converted = convertAmount(Math.abs(t.amount), txCurrency);
         totals[cat] = (totals[cat] || 0) + converted;
         totalExpense += converted;
       });
@@ -625,8 +638,53 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         )}
 
-        {/* ── 6. Recent Transactions ── */}
+        {/* ── 6. Upcoming Bills ── */}
         <View style={[styles.sectionHeader, { marginTop: 10 }]}>
+          <View>
+            <AppText style={[styles.sectionTitle, { color: colors.text }]}>Upcoming Bills</AppText>
+            <AppText style={[styles.sectionSub, { color: colors.muted }]}>Bills with active reminders</AppText>
+          </View>
+          <Pressable onPress={() => navigation.getParent()?.navigate('Reminders')} style={{ alignSelf: 'center' }}>
+            <AppText style={[styles.manageLink, { color: colors.accent }]}>View All &gt;</AppText>
+          </Pressable>
+        </View>
+
+        {upcomingBills.length > 0 ? (
+          <View style={{ gap: 12 }}>
+            {upcomingBills.map((bill) => {
+              const catMeta = getCategoryMeta(bill.category);
+              const { label: dueLabel, isOverdue, isToday } = getDueLabel(bill.due_date);
+              const dueColor = isOverdue ? colors.danger : isToday ? colors.warning : colors.muted;
+
+              return (
+                <View key={bill.id} style={[styles.txCard, { backgroundColor: colors.surface }, theme === 'light' && styles.cardShadowLight]}>
+                  <View style={[styles.txIcon, { backgroundColor: colors.accent + '15' }]}>
+                    <Icon name={catMeta.icon} size={20} color={colors.accent} />
+                  </View>
+                  <View style={styles.txInfo}>
+                    <AppText style={[styles.txName, { color: colors.text }]}>{bill.title}</AppText>
+                    <AppText style={[styles.txSub, { color: dueColor }]}>
+                      {dueLabel}
+                    </AppText>
+                  </View>
+                  <View style={styles.txAmountRow}>
+                    <AppText style={[styles.txAmount, { color: colors.text }]}>
+                      Rs {formatMoney(Math.abs(bill.amount), '')}
+                    </AppText>
+                    <Icon name="trending-down" size={16} color={colors.danger} />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={[styles.cardWrap, { backgroundColor: colors.surface, alignItems: 'center', padding: 20 }]}>
+            <AppText style={{ color: colors.muted, fontSize: 14 }}>No upcoming bills</AppText>
+          </View>
+        )}
+
+        {/* ── 7. Recent Transactions ── */}
+        <View style={styles.sectionHeader}>
           <View>
             <AppText style={[styles.sectionTitle, { color: colors.text }]}>Recent Transactions</AppText>
             <AppText style={[styles.sectionSub, { color: colors.muted }]}>Your Recent Earnings & Spendings</AppText>
@@ -675,52 +733,6 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         )}
 
-        {/* ── 7. Recurring Section ── */}
-        <View style={styles.sectionHeader}>
-          <View>
-            <AppText style={[styles.sectionTitle, { color: colors.text }]}>Upcoming Payments</AppText>
-            <AppText style={[styles.sectionSub, { color: colors.muted }]}>Your Recurring Income & Expenses</AppText>
-          </View>
-          <Pressable onPress={() => navigation.getParent()?.navigate('Recurring')} style={{ alignSelf: 'center' }}>
-            <AppText style={[styles.manageLink, { color: colors.accent }]}>View All &gt;</AppText>
-          </Pressable>
-        </View>
-
-        {upcomingBills.length > 0 ? (
-          <View style={{ gap: 12 }}>
-            {upcomingBills.map((bill) => {
-              const isIncome = bill.amount >= 0;
-              const catMeta = getCategoryMeta(bill.category);
-              const { label: dueLabel, isOverdue, isToday, isFuture } = getDueLabel(bill.next_run);
-              const dueColor = isOverdue ? colors.danger : isToday ? colors.warning : colors.muted;
-
-              return (
-                <View key={bill.id} style={[styles.txCard, { backgroundColor: colors.surface }, theme === 'light' && styles.cardShadowLight]}>
-                  <View style={[styles.txIcon, { backgroundColor: colors.accent + '15' }]}>
-                    <Icon name={catMeta.icon} size={20} color={colors.accent} />
-                  </View>
-                  <View style={styles.txInfo}>
-                    <AppText style={[styles.txName, { color: colors.text }]}>{bill.title}</AppText>
-                    <AppText style={[styles.txSub, { color: dueColor }]}>
-                      {dueLabel}
-                    </AppText>
-                  </View>
-                  <View style={styles.txAmountRow}>
-                    <AppText style={[styles.txAmount, { color: colors.text }]}>
-                      {isIncome ? '' : ''}Rs {formatMoney(Math.abs(bill.amount), '')}
-                    </AppText>
-                    <Icon name={isIncome ? "trending-up" : "trending-down"} size={16} color={isIncome ? colors.success : colors.danger} />
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        ) : (
-          <View style={[styles.cardWrap, { backgroundColor: colors.surface, alignItems: 'center', padding: 20 }]}>
-            <AppText style={{ color: colors.muted, fontSize: 14 }}>No upcoming entries</AppText>
-          </View>
-        )}
-
         <View style={{ height: scaleHeight(60) }} />
       </ScrollView>
 
@@ -736,7 +748,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: scaleHeight(55),
-    paddingBottom: 40,
+    paddingBottom: scaleHeight(100),
   },
   cardShadowLight: {
     shadowColor: '#000',

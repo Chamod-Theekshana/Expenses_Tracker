@@ -12,7 +12,14 @@ export class ProfileService {
 
   static async updateProfile(
     userId: string,
-    updates: { name?: string; profile_photo?: string; theme?: string; currency?: string; date_format?: string }
+    updates: {
+      name?: string;
+      profile_photo?: string;
+      theme?: string;
+      currency?: string;
+      date_format?: string;
+      biometric_enabled?: boolean;
+    }
   ): Promise<User> {
     const data = await apiFetch<any>(`/api/profile/${userId}`, {
       method: 'PUT',

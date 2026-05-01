@@ -35,6 +35,16 @@ export default function ChartsScreen() {
     const categories: Record<string, number> = {};
 
     expenses.forEach(t => {
+      const splitRows = (t.splits || []).filter(split => Number(split.amount) < 0);
+
+      if (splitRows.length > 0) {
+        splitRows.forEach((split) => {
+          const cat = split.category || 'Other';
+          categories[cat] = (categories[cat] || 0) + Math.abs(Number(split.amount));
+        });
+        return;
+      }
+
       const cat = t.category || 'Other';
       categories[cat] = (categories[cat] || 0) + Math.abs(t.amount);
     });
@@ -81,12 +91,22 @@ export default function ChartsScreen() {
     months.forEach(m => {
       const data = byKey[m.key];
       barData.push(
-        { value: data.income, frontColor: colors.success, spacing: 4, label: m.label },
+        {
+          value: data.income,
+          frontColor: colors.success,
+          spacing: 8,
+          label: m.label,
+          labelWidth: 46,
+          labelTextStyle: { color: colors.muted, fontSize: 11, textAlign: 'center' },
+        },
         { value: data.expense, frontColor: colors.danger }
       );
     });
     return barData;
   }, [filteredItems, colors]);
+
+  const monthlyGroupCount = Math.ceil(monthlyData.length / 2);
+  const monthlyChartWidth = Math.max(width - 100, monthlyGroupCount * 84);
 
   const cardShadow = theme === 'light' ? styles.cardShadowLight : {};
 
@@ -102,7 +122,7 @@ export default function ChartsScreen() {
         </Pressable>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: scaleHeight(160) }}>
         
         {/* Expense by Category */}
         <View style={[styles.card, cardShadow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -110,13 +130,13 @@ export default function ChartsScreen() {
             Expense by Category
           </AppText>
           
-          <View style={{ alignItems: 'center', justifyContent: 'center', height: 220 }}>
+          <View style={{ alignItems: 'center', justifyContent: 'center', height: 250 }}>
             {categoryData.length > 0 ? (
               <PieChart
                 donut
                 data={categoryData}
-                radius={90}
-                innerRadius={60}
+                radius={130}
+                innerRadius={80}
                 backgroundColor={colors.surface}
                 centerLabelComponent={() => {
                   const totalExp = categoryData.reduce((acc, curr) => acc + curr.value, 0);
@@ -155,23 +175,27 @@ export default function ChartsScreen() {
             Monthly Overview
           </AppText>
           
-          <View style={{ alignItems: 'center', marginLeft: -20 }}>
+          <View style={{ marginLeft: -20 }}>
             {monthlyData.length > 0 ? (
-              <BarChart
-                data={monthlyData}
-                width={width - 100}
-                height={200}
-                barWidth={12}
-                spacing={24}
-                roundedTop
-                xAxisThickness={1}
-                yAxisThickness={0}
-                xAxisColor={colors.border}
-                yAxisTextStyle={{ color: colors.muted, fontSize: 10 }}
-                xAxisLabelTextStyle={{ color: colors.muted, fontSize: 11 }}
-                hideRules
-                noOfSections={4}
-              />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: spacing.md }}>
+                <BarChart
+                  data={monthlyData}
+                  width={monthlyChartWidth}
+                  height={200}
+                  barWidth={12}
+                  spacing={20}
+                  roundedTop
+                  xAxisThickness={1}
+                  yAxisThickness={0}
+                  xAxisColor={colors.border}
+                  xAxisTextNumberOfLines={1}
+                  xAxisLabelsHeight={20}
+                  yAxisTextStyle={{ color: colors.muted, fontSize: 10 }}
+                  xAxisLabelTextStyle={{ color: colors.muted, fontSize: 11 }}
+                  hideRules
+                  noOfSections={4}
+                />
+              </ScrollView>
             ) : null}
           </View>
           

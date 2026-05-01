@@ -114,12 +114,38 @@ export class BudgetModel {
         ORDER BY category ASC
       `,
       sql`
-        SELECT category, currency, ABS(SUM(amount)) AS total
-        FROM transactions
-        WHERE user_id = ${userId}
-          AND amount < 0
-          AND created_at >= ${startDate}::date
-          AND created_at <= ${endDate}::date
+        WITH unsplit_expenses AS (
+          SELECT t.category AS category, t.currency AS currency, ABS(SUM(t.amount)) AS total
+          FROM transactions t
+          WHERE t.user_id = ${userId}
+            AND t.amount < 0
+            AND t.created_at >= ${startDate}::date
+            AND t.created_at <= ${endDate}::date
+            AND NOT EXISTS (
+              SELECT 1
+              FROM transaction_splits s
+              WHERE s.transaction_id = t.id
+            )
+          GROUP BY t.category, t.currency
+        ),
+        split_expenses AS (
+          SELECT s.category AS category, t.currency AS currency, ABS(SUM(s.amount)) AS total
+          FROM transaction_splits s
+          INNER JOIN transactions t ON t.id = s.transaction_id
+          WHERE s.user_id = ${userId}
+            AND t.user_id = ${userId}
+            AND s.amount < 0
+            AND t.created_at >= ${startDate}::date
+            AND t.created_at <= ${endDate}::date
+          GROUP BY s.category, t.currency
+        ),
+        combined AS (
+          SELECT category, currency, total FROM unsplit_expenses
+          UNION ALL
+          SELECT category, currency, total FROM split_expenses
+        )
+        SELECT category, currency, SUM(total) AS total
+        FROM combined
         GROUP BY category, currency
       `,
     ]);
@@ -219,12 +245,38 @@ export class BudgetModel {
     const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
     const rows = await sql`
-      SELECT ABS(SUM(amount)) AS total, currency
-      FROM transactions
-      WHERE user_id = ${userId}
-        AND category = ${category}
-        AND amount < 0
-        AND created_at >= ${firstOfMonth}::date
+      WITH unsplit_expenses AS (
+        SELECT ABS(SUM(t.amount)) AS total, t.currency AS currency
+        FROM transactions t
+        WHERE t.user_id = ${userId}
+          AND t.category = ${category}
+          AND t.amount < 0
+          AND t.created_at >= ${firstOfMonth}::date
+          AND NOT EXISTS (
+            SELECT 1
+            FROM transaction_splits s
+            WHERE s.transaction_id = t.id
+          )
+        GROUP BY t.currency
+      ),
+      split_expenses AS (
+        SELECT ABS(SUM(s.amount)) AS total, t.currency AS currency
+        FROM transaction_splits s
+        INNER JOIN transactions t ON t.id = s.transaction_id
+        WHERE s.user_id = ${userId}
+          AND t.user_id = ${userId}
+          AND s.category = ${category}
+          AND s.amount < 0
+          AND t.created_at >= ${firstOfMonth}::date
+        GROUP BY t.currency
+      ),
+      combined AS (
+        SELECT total, currency FROM unsplit_expenses
+        UNION ALL
+        SELECT total, currency FROM split_expenses
+      )
+      SELECT SUM(total) AS total, currency
+      FROM combined
       GROUP BY currency
     `;
 

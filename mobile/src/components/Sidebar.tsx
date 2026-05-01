@@ -170,6 +170,7 @@ export default function Sidebar() {
           <View style={[styles.navGroup, { borderColor: colors.border }]}>
             <NavItem title="Saving Goals" icon="target" screen="Goals" />
             <NavItem title="Budget Management" icon="chart" screen="Budgets" />
+            <NavItem title="Bill Reminders" icon="bell" screen="Reminders" />
             <NavItem title="Recurring Transactions" icon="refresh-cw" screen="Recurring" isLast />
           </View>
 

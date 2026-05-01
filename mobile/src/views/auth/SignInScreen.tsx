@@ -1,29 +1,31 @@
 import React, { useContext, useMemo, useState } from 'react';
-import { View, StyleSheet, Alert, Pressable, ScrollView } from 'react-native';
+import { View, StyleSheet, Alert, Pressable, ScrollView, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppText from '../../components/AppText';
 import AppInput from '../../components/AppInput';
 import AppButton from '../../components/AppButton';
 import Icon from '../../components/Icon';
-import { radius, spacing } from '../../theme/colors';
+import { spacing } from '../../theme/colors';
 import { AuthContext } from '../../store/auth';
-import Card from '../../components/Card';
 import { scaleHeight } from '../../constants/size';
 import { ThemeContext } from '../../store/theme';
+import { images } from '../../constants/images';
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function SignInScreen({ navigation }: any) {
   const { signIn } = useContext(AuthContext);
   const { colors, theme } = useContext(ThemeContext);
+  const insets = useSafeAreaInsets();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const canSubmit = useMemo(
-    () => emailValid && password.length >= 6,
-    [emailValid, password],
-  );
+  const emailValid = EMAIL_REGEX.test(email.trim());
+  const canSubmit = useMemo(() => emailValid && password.length >= 6, [emailValid, password]);
 
   const onSubmit = async () => {
     if (!emailValid) {
@@ -44,120 +46,210 @@ export default function SignInScreen({ navigation }: any) {
     }
   };
 
-  const cardShadow = theme === 'light' ? styles.cardShadowLight : {};
+  const onForgotPassword = () => {
+    Alert.alert('Coming soon', 'Forgot password will be available soon.');
+  };
+
+  const pageBg = theme === 'light' ? '#F3F4F8' : colors.bg;
+  const helperText = theme === 'light' ? '#6A6F86' : colors.textSecondary;
 
   return (
-    <ScrollView 
-      style={[styles.wrap, { backgroundColor: colors.bg }]}
-      contentContainerStyle={{ flexGrow: 1, paddingBottom: scaleHeight(40) }}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={styles.header}>
-        <View style={[styles.iconWrap, { backgroundColor: colors.accent + '20' }]}>
-          <Icon name="log-in" size={32} color={colors.accent} />
+    <View style={[styles.wrap, { backgroundColor: pageBg }]}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: Math.max(insets.top + 16, scaleHeight(24)),
+            paddingBottom: Math.max(insets.bottom + 16, scaleHeight(24)),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.brandWrap}>
+          <Image source={images.splashScreen} style={styles.brandLogo} resizeMode="contain" />
         </View>
-        <AppText title style={{ fontSize: 28, marginTop: 16 }}>
-          Welcome back
-        </AppText>
-        <AppText muted style={{ fontSize: 16, marginTop: 8, textAlign: 'center' }}>
-          Sign in to continue tracking your spending and achieving your goals.
-        </AppText>
-      </View>
 
-      <Card style={[styles.formCard, cardShadow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <AppText style={[styles.label, { color: colors.text }]}>Email</AppText>
-        <AppInput
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          placeholder="Enter your email"
-          autoComplete="email"
-          textContentType="emailAddress"
-          returnKeyType="next"
-        />
+        <View style={styles.header}>
+          <AppText style={[styles.title, { color: colors.text }]}>Good to See You Again!</AppText>
+          <AppText style={[styles.subtitle, { color: helperText }]}>Let’s get your finances on track today.</AppText>
+        </View>
 
-        <View style={{ height: 20 }} />
+        <View style={styles.formWrap}>
+          <AppText style={[styles.label, { color: colors.text }]}>Email Address</AppText>
+          <AppInput
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            placeholder="Enter your Email Address"
+            autoComplete="email"
+            textContentType="emailAddress"
+            returnKeyType="next"
+          />
 
-        <AppText style={[styles.label, { color: colors.text }]}>Password</AppText>
-        <AppInput
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry={!showPassword}
-          placeholder="••••••••"
-          autoComplete="password"
-          textContentType="password"
-          returnKeyType="done"
-          onSubmitEditing={onSubmit}
-          right={
-            <Pressable onPress={() => setShowPassword((p) => !p)} hitSlop={10} style={{ padding: 4 }}>
-              <Icon name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.muted} />
+          <View style={styles.fieldGap} />
+
+          <AppText style={[styles.label, { color: colors.text }]}>Password</AppText>
+          <AppInput
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+            placeholder="Enter your Password"
+            autoComplete="password"
+            textContentType="password"
+            returnKeyType="done"
+            onSubmitEditing={onSubmit}
+            right={
+              <Pressable onPress={() => setShowPassword((p) => !p)} hitSlop={10} style={{ padding: 4 }}>
+                <Icon name={showPassword ? 'eye-off' : 'eye'} size={20} color={theme === 'light' ? '#151515' : colors.muted} />
+              </Pressable>
+            }
+          />
+
+          <View style={styles.metaRow}>
+            <Pressable onPress={() => setRememberMe((v) => !v)} style={styles.rememberWrap} hitSlop={8}>
+              <View
+                style={[
+                  styles.checkbox,
+                  {
+                    borderColor: rememberMe ? colors.accent : theme === 'light' ? '#2F2F2F' : colors.border,
+                    backgroundColor: rememberMe ? colors.accent : 'transparent',
+                  },
+                ]}
+              >
+                {rememberMe ? <Icon name="check" size={12} color="#FFFFFF" strokeWidth={2.8} /> : null}
+              </View>
+              <AppText style={[styles.metaText, { color: colors.accent }]}>Remember Me</AppText>
             </Pressable>
-          }
-        />
 
-        <AppButton
-          title="Sign In"
-          onPress={onSubmit}
-          loading={loading}
-          disabled={!canSubmit || loading}
-          style={{ marginTop: 32 }}
-          size="lg"
-        />
-      </Card>
+            <Pressable onPress={onForgotPassword} hitSlop={10} style={{ paddingVertical: 6 }}>
+              <AppText style={[styles.metaText, { color: colors.accent }]}>Forgot Password?</AppText>
+            </Pressable>
+          </View>
 
-      <View style={styles.footer}>
-        <Pressable onPress={() => navigation.navigate('SignupEmail')} hitSlop={10} style={{ padding: 10 }}>
-          <AppText muted style={{ fontSize: 15 }}>
-            New here?{' '}
-            <AppText style={{ color: colors.accent, fontWeight: '700', fontSize: 15 }}>Create an account</AppText>
-          </AppText>
-        </Pressable>
-      </View>
-    </ScrollView>
+          <AppButton
+            title="Sign In"
+            onPress={onSubmit}
+            loading={loading}
+            disabled={!canSubmit || loading}
+            size="lg"
+            style={styles.signInButton}
+            textStyle={styles.signInButtonText}
+          />
+
+          <View style={styles.footer}>
+            <Pressable onPress={() => navigation.navigate('SignupEmail')} hitSlop={10} style={{ padding: 8 }}>
+              <AppText style={[styles.footerText, { color: colors.text }]}> 
+                New Here? <AppText style={[styles.footerAccent, { color: colors.text }]}>Create Account</AppText>
+              </AppText>
+            </Pressable>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    paddingHorizontal: spacing.xl,
-    paddingTop: scaleHeight(60),
+  },
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.lg,
+    justifyContent: 'center',
+  },
+  brandWrap: {
+    alignItems: 'center',
+    marginBottom: scaleHeight(22),
+  },
+  brandLogo: {
+    width: 118,
+    height: 86,
   },
   header: {
     alignItems: 'center',
-    marginBottom: scaleHeight(30),
+    marginBottom: scaleHeight(44),
   },
-  iconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
+  title: {
+    textAlign: 'center',
+    fontSize: 18,
+    lineHeight: 40,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
-  formCard: {
-    padding: 24,
-    borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
+  subtitle: {
+    marginTop: 0,
+    textAlign: 'center',
+    fontSize: 12,
+    lineHeight: 24,
+    fontWeight: '500',
+  },
+  formWrap: {
+    marginTop: scaleHeight(4),
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700',
     marginBottom: 8,
-    marginLeft: 4,
+  },
+  fieldGap: {
+    height: 16,
+  },
+  metaRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rememberWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 3,
+    borderWidth: 1.3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metaText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+  signInButton: {
+    marginTop: scaleHeight(52),
+    borderRadius: 12,
+    borderWidth: 0,
+    elevation: 0,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  signInButtonText: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '600',
   },
   footer: {
-    marginTop: 'auto',
     alignItems: 'center',
-    paddingTop: 32,
+    marginTop: 20,
   },
-  cardShadowLight: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 16,
-    elevation: 3,
+  footerText: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  footerAccent: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '800',
   },
 });

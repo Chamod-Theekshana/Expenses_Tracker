@@ -20,21 +20,31 @@ export type BudgetStatus = BudgetRow & {
 };
 
 export class BudgetModel {
-  static async listByUser(userId: string): Promise<BudgetRow[]> {
+  static async listByUser(userId: string, limit: number, offset: number): Promise<BudgetRow[]> {
     const rows = await sql`
       SELECT id, user_id, category, amount, currency, period, created_at
       FROM budgets
-      WHERE user_id = ${userId}
+      WHERE user_id = ${userId} AND deleted_at IS NULL
       ORDER BY category ASC
+      LIMIT ${limit} OFFSET ${offset}
     `;
     return rows as BudgetRow[];
+  }
+
+  static async countByUser(userId: string): Promise<number> {
+    const rows = await sql`
+      SELECT COUNT(*)::int AS count
+      FROM budgets
+      WHERE user_id = ${userId} AND deleted_at IS NULL
+    `;
+    return Number((rows[0] as any)?.count || 0);
   }
 
   static async findById(userId: string, id: number): Promise<BudgetRow | null> {
     const rows = await sql`
       SELECT id, user_id, category, amount, currency, period, created_at
       FROM budgets
-      WHERE id = ${id} AND user_id = ${userId}
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
     `;
     return (rows[0] as BudgetRow) || null;
   }
@@ -58,7 +68,7 @@ export class BudgetModel {
     const rows = await sql`
       UPDATE budgets
       SET amount = ${amount}
-      WHERE id = ${id} AND user_id = ${userId}
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
       RETURNING id, user_id, category, amount, currency, period, created_at
     `;
     return (rows[0] as BudgetRow) || null;
@@ -66,11 +76,25 @@ export class BudgetModel {
 
   static async delete(userId: string, id: number): Promise<boolean> {
     const rows = await sql`
-      DELETE FROM budgets
-      WHERE id = ${id} AND user_id = ${userId}
+      UPDATE budgets
+      SET deleted_at = NOW()
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
       RETURNING id
     `;
     return rows.length > 0;
+  }
+
+  static async bulkDeleteByUser(userId: string, ids: number[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const rows = await sql`
+      UPDATE budgets
+      SET deleted_at = NOW()
+      WHERE user_id = ${userId}
+        AND deleted_at IS NULL
+        AND id = ANY(${ids}::int[])
+      RETURNING id
+    `;
+    return rows.length;
   }
 
   /**
@@ -110,7 +134,7 @@ export class BudgetModel {
       sql`
         SELECT id, user_id, category, amount, currency, period, created_at
         FROM budgets
-        WHERE user_id = ${userId}
+        WHERE user_id = ${userId} AND deleted_at IS NULL
         ORDER BY category ASC
       `,
       sql`
@@ -119,6 +143,7 @@ export class BudgetModel {
           FROM transactions t
           WHERE t.user_id = ${userId}
             AND t.amount < 0
+            AND t.deleted_at IS NULL
             AND t.created_at >= ${startDate}::date
             AND t.created_at <= ${endDate}::date
             AND NOT EXISTS (
@@ -135,6 +160,7 @@ export class BudgetModel {
           WHERE s.user_id = ${userId}
             AND t.user_id = ${userId}
             AND s.amount < 0
+            AND t.deleted_at IS NULL
             AND t.created_at >= ${startDate}::date
             AND t.created_at <= ${endDate}::date
           GROUP BY s.category, t.currency
@@ -235,7 +261,7 @@ export class BudgetModel {
     const rows = await sql`
       SELECT id, user_id, category, amount, currency, period, created_at
       FROM budgets
-      WHERE user_id = ${userId} AND category = ${category}
+      WHERE user_id = ${userId} AND category = ${category} AND deleted_at IS NULL
     `;
     return (rows[0] as BudgetRow) || null;
   }
@@ -251,6 +277,7 @@ export class BudgetModel {
         WHERE t.user_id = ${userId}
           AND t.category = ${category}
           AND t.amount < 0
+          AND t.deleted_at IS NULL
           AND t.created_at >= ${firstOfMonth}::date
           AND NOT EXISTS (
             SELECT 1

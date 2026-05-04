@@ -1,7 +1,9 @@
 import express from 'express';
 import { requireAuth } from '../middleware/requireAuth';
-import { validateNumericParam } from '../middleware/validators';
+import { asyncHandler } from '../middleware/asyncHandler';
+import { parsePagination, validateIdListBody, validateNumericParam } from '../middleware/validators';
 import {
+  bulkDeleteReminders,
   createReminder,
   deleteReminder,
   listReminders,
@@ -12,9 +14,10 @@ const router = express.Router();
 
 router.use(requireAuth);
 
-router.get('/', listReminders);
-router.post('/', createReminder);
-router.put('/:id', validateNumericParam('id'), updateReminder);
-router.delete('/:id', validateNumericParam('id'), deleteReminder);
+router.get('/', parsePagination(), asyncHandler(listReminders));
+router.post('/bulk-delete', validateIdListBody('ids'), asyncHandler(bulkDeleteReminders));
+router.post('/', asyncHandler(createReminder));
+router.put('/:id', validateNumericParam('id'), asyncHandler(updateReminder));
+router.delete('/:id', validateNumericParam('id'), asyncHandler(deleteReminder));
 
 export default router;

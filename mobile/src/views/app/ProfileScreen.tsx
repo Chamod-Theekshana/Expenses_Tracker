@@ -1,5 +1,5 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, Share, StyleSheet, Switch, View } from 'react-native';
 import * as ImagePicker from 'react-native-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppText from '../../components/AppText';
@@ -31,6 +31,7 @@ function splitProfileName(fullName: string) {
 
 export default function ProfileScreen({ navigation }: any) {
   const { userEmail, userId, signOut } = useContext(AuthContext);
+  const [exportingBackup, setExportingBackup] = useState(false);
   const insets = useSafeAreaInsets();
   const { theme, colors, setTheme } = useContext(ThemeContext);
   const {
@@ -316,6 +317,23 @@ export default function ProfileScreen({ navigation }: any) {
     onPress?: () => void;
   };
 
+  const exportDataBackup = useCallback(async () => {
+    if (!userId || exportingBackup) return;
+    try {
+      setExportingBackup(true);
+      const data = await ProfileService.exportDataBackup(userId);
+      const json = JSON.stringify(data, null, 2);
+      await Share.share({
+        title: 'PulseSpend data backup',
+        message: json.length > 950_000 ? `${json.slice(0, 950_000)}\n…(truncated for share sheet)` : json,
+      });
+    } catch (e: any) {
+      Alert.alert('Export failed', e?.message || 'Could not export data');
+    } finally {
+      setExportingBackup(false);
+    }
+  }, [exportingBackup, userId]);
+
   const sections = useMemo(
     () => ({
       account: [
@@ -328,6 +346,11 @@ export default function ProfileScreen({ navigation }: any) {
           title: 'Password & Security',
           icon: 'lock' as const,
           onPress: () => setPasswordVisible(true),
+        },
+        {
+          title: exportingBackup ? 'Preparing backup…' : 'Export data backup',
+          icon: 'file-text' as const,
+          onPress: exportDataBackup,
         },
         {
           title: 'Notifications',
@@ -392,7 +415,17 @@ export default function ProfileScreen({ navigation }: any) {
         },
       ] satisfies Row[],
     }),
-    [displayCurrency, displayDateFormat, displayLanguage, displayTheme, openManageProfile, signOut, theme],
+    [
+      displayCurrency,
+      displayDateFormat,
+      displayLanguage,
+      displayTheme,
+      exportDataBackup,
+      exportingBackup,
+      openManageProfile,
+      signOut,
+      theme,
+    ],
   );
 
   const RowItem = ({ title, icon, rightText, danger, onPress, isLast }: Row & { isLast: boolean }) => {

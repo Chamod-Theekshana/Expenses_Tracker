@@ -5,11 +5,12 @@ export function requestLogger(req: Request, res: Response, next: NextFunction) {
   res.on('finish', () => {
     const ms = Date.now() - start;
     // Basic structured-ish logging without extra deps.
+    const path = req.originalUrl.split('?')[0];
     console.log(
       JSON.stringify({
         ts: new Date().toISOString(),
         method: req.method,
-        path: req.originalUrl,
+        path,
         status: res.statusCode,
         ms,
       }),

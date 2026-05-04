@@ -2,14 +2,14 @@ import { User } from '../models/User';
 import { apiFetch } from './http';
 
 export class AuthService {
-  static async signIn(email: string, password: string): Promise<{ user: User; token: string }> {
+  static async signIn(email: string, password: string): Promise<{ user: User; token: string; refreshToken?: string }> {
     return apiFetch('/api/auth/signin', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
   }
 
-  static async signUp(email: string, password: string): Promise<{ user: User; token: string }> {
+  static async signUp(email: string, password: string): Promise<{ user: User; token: string; refreshToken?: string }> {
     return apiFetch('/api/auth/signup', {
       method: 'POST',
       body: JSON.stringify({ email, password }),

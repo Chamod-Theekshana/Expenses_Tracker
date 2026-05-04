@@ -1,5 +1,6 @@
 import { sendPushToUser } from './pushService';
 import { sql } from '../config/db';
+import { withRetries } from './retry';
 
 // Map of userId -> timeout timer (daily schedule)
 const activeTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
@@ -47,7 +48,7 @@ function scheduleDaily(userId: string, hour: number, minute: number) {
 
   const timeout = setTimeout(async () => {
     try {
-      await sendTestNotification(userId);
+      await withRetries(() => sendTestNotification(userId), { retries: 1, delayMs: 500 });
     } catch (err) {
       console.error('[TestNotif] Error in daily send:', err);
     } finally {

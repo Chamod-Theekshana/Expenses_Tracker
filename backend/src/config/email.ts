@@ -1,12 +1,15 @@
+import { transporter } from './nodemailer';
+
 export async function sendOTPEmail(email: string, otp: string): Promise<void> {
-  // Mock implementation - replace with actual email service (SendGrid, Nodemailer, etc.)
-  console.log(`📧 OTP Email sent to ${email}: ${otp}`);
-  
-  // In production, use:
-  // const transporter = nodemailer.createTransport({...});
-  // await transporter.sendMail({
-  //   to: email,
-  //   subject: 'Your PulseSpend Passkey',
-  //   html: `<h2>Your passkey is: <strong>${otp}</strong></h2><p>Valid for 5 minutes</p>`
-  // });
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    to: email,
+    subject: 'Your PulseSpend OTP',
+    html: `
+      <h2>Your verification OTP is:</h2>
+      <h1 style="color: #DBFF00; font-size: 32px; letter-spacing: 8px;">${otp}</h1>
+      <p>This OTP will expire in 5 minutes.</p>
+      <p>If you didn't request this, please ignore this email.</p>
+    `,
+  });
 }

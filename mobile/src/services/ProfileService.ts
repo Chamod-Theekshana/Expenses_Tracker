@@ -37,4 +37,9 @@ export class ProfileService {
       body: JSON.stringify({ currentPassword, newPassword }),
     });
   }
+
+  /** Full JSON backup (transactions, categories, budgets, goals, reminders, recurring). */
+  static async exportDataBackup(userId: string): Promise<Record<string, unknown>> {
+    return apiFetch<Record<string, unknown>>(`/api/profile/${userId}/data-export`);
+  }
 }

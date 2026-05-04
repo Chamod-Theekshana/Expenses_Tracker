@@ -15,21 +15,31 @@ export type ReminderRow = {
 };
 
 export class ReminderModel {
-  static async listByUser(userId: string): Promise<ReminderRow[]> {
+  static async listByUser(userId: string, limit: number, offset: number): Promise<ReminderRow[]> {
     const rows = await sql`
       SELECT id, user_id, title, amount, currency, category, due_date, remind_days_before, is_active, last_notified_on, created_at
       FROM reminders
-      WHERE user_id = ${userId}
+      WHERE user_id = ${userId} AND deleted_at IS NULL
       ORDER BY due_date ASC, id DESC
+      LIMIT ${limit} OFFSET ${offset}
     `;
     return rows as ReminderRow[];
+  }
+
+  static async countByUser(userId: string): Promise<number> {
+    const rows = await sql`
+      SELECT COUNT(*)::int AS count
+      FROM reminders
+      WHERE user_id = ${userId} AND deleted_at IS NULL
+    `;
+    return Number((rows[0] as any)?.count || 0);
   }
 
   static async findById(userId: string, id: number): Promise<ReminderRow | null> {
     const rows = await sql`
       SELECT id, user_id, title, amount, currency, category, due_date, remind_days_before, is_active, last_notified_on, created_at
       FROM reminders
-      WHERE id = ${id} AND user_id = ${userId}
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
     `;
     return (rows[0] as ReminderRow) || null;
   }
@@ -85,6 +95,7 @@ export class ReminderModel {
           ELSE last_notified_on
         END
       WHERE id = ${id} AND user_id = ${userId}
+        AND deleted_at IS NULL
       RETURNING id, user_id, title, amount, currency, category, due_date, remind_days_before, is_active, last_notified_on, created_at
     `;
 
@@ -93,11 +104,25 @@ export class ReminderModel {
 
   static async delete(userId: string, id: number): Promise<boolean> {
     const rows = await sql`
-      DELETE FROM reminders
-      WHERE id = ${id} AND user_id = ${userId}
+      UPDATE reminders
+      SET deleted_at = NOW()
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
       RETURNING id
     `;
     return rows.length > 0;
+  }
+
+  static async bulkDeleteByUser(userId: string, ids: number[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const rows = await sql`
+      UPDATE reminders
+      SET deleted_at = NOW()
+      WHERE user_id = ${userId}
+        AND deleted_at IS NULL
+        AND id = ANY(${ids}::int[])
+      RETURNING id
+    `;
+    return rows.length;
   }
 
   static async listDueForReminderDate(today: string): Promise<ReminderRow[]> {
@@ -105,6 +130,7 @@ export class ReminderModel {
       SELECT id, user_id, title, amount, currency, category, due_date, remind_days_before, is_active, last_notified_on, created_at
       FROM reminders
       WHERE is_active = true
+        AND deleted_at IS NULL
         AND due_date >= ${today}::date
         AND (due_date::date - ${today}::date) = remind_days_before
         AND (last_notified_on IS NULL OR last_notified_on::date <> ${today}::date)

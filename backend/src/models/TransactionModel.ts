@@ -32,6 +32,7 @@ export interface Transaction {
   currency: string;
   category: string;
   created_at: Date;
+  deleted_at?: Date | null;
   notes?: string | null;
   receipt_url?: string | null;
   tags?: string[];
@@ -133,11 +134,12 @@ export class TransactionModel {
     }
   }
 
-  static async findByUserId(userId: string): Promise<Transaction[]> {
+  static async listByUser(userId: string, limit: number, offset: number): Promise<Transaction[]> {
     const transactions = await sql`
       SELECT * FROM transactions 
-      WHERE user_id = ${userId} 
+      WHERE user_id = ${userId} AND deleted_at IS NULL
       ORDER BY created_at DESC, id DESC
+      LIMIT ${limit} OFFSET ${offset}
     `;
 
     const txRows = transactions as Transaction[];
@@ -168,6 +170,15 @@ export class TransactionModel {
       tags: tagsByTxId.get(Number(tx.id)) || [],
       splits: splitsByTxId.get(Number(tx.id)) || [],
     }));
+  }
+
+  static async countByUser(userId: string): Promise<number> {
+    const rows = await sql`
+      SELECT COUNT(*)::int AS count
+      FROM transactions
+      WHERE user_id = ${userId} AND deleted_at IS NULL
+    `;
+    return Number((rows[0] as any)?.count || 0);
   }
 
   static async create(
@@ -213,11 +224,30 @@ export class TransactionModel {
   }
 
   static async deleteByUser(id: string, userId: string): Promise<void> {
-    await sql`DELETE FROM transactions WHERE id = ${id} AND user_id = ${userId}`;
+    await sql`
+      UPDATE transactions
+      SET deleted_at = NOW()
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
+    `;
+  }
+
+  static async bulkDeleteByUser(userId: string, ids: number[]): Promise<number> {
+    const rows = await sql`
+      UPDATE transactions
+      SET deleted_at = NOW()
+      WHERE user_id = ${userId}
+        AND deleted_at IS NULL
+        AND id = ANY(${ids}::int[])
+      RETURNING id
+    `;
+    return rows.length;
   }
 
   static async findByIdAndUser(id: string, userId: string): Promise<Transaction | null> {
-    const rows = await sql`SELECT * FROM transactions WHERE id = ${id} AND user_id = ${userId}`;
+    const rows = await sql`
+      SELECT * FROM transactions
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
+    `;
     const tx = (rows?.[0] as Transaction) || null;
     if (!tx) return null;
 
@@ -257,13 +287,13 @@ export class TransactionModel {
         ? await sql`
             UPDATE transactions
             SET title = ${title}, amount = ${amount}, category = ${category}, currency = ${cur}, created_at = ${createdAt}, receipt_url = ${receipt}, notes = ${normalizedNotes}
-            WHERE id = ${id} AND user_id = ${userId}
+            WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
             RETURNING *
           `
         : await sql`
             UPDATE transactions
             SET title = ${title}, amount = ${amount}, category = ${category}, currency = ${cur}, created_at = ${createdAt}, receipt_url = ${receipt}
-            WHERE id = ${id} AND user_id = ${userId}
+            WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
             RETURNING *
           `;
     } else {
@@ -271,13 +301,13 @@ export class TransactionModel {
         ? await sql`
             UPDATE transactions
             SET title = ${title}, amount = ${amount}, category = ${category}, currency = ${cur}, receipt_url = ${receipt}, notes = ${normalizedNotes}
-            WHERE id = ${id} AND user_id = ${userId}
+            WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
             RETURNING *
           `
         : await sql`
             UPDATE transactions
             SET title = ${title}, amount = ${amount}, category = ${category}, currency = ${cur}, receipt_url = ${receipt}
-            WHERE id = ${id} AND user_id = ${userId}
+            WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
             RETURNING *
           `;
     }

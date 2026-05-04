@@ -19,10 +19,18 @@ type TypeFilter = (typeof TYPE_FILTERS)[number];
 
 export default function TransactionsScreen() {
   const navigation: any = useNavigation();
-  const { items, removeTx, fetchTransactions } = useContext(TransactionsContext);
+  const {
+    items,
+    removeTx,
+    fetchTransactions,
+    loadMoreTransactions,
+    hasMoreTransactions,
+    loadingMore,
+    txTotal,
+    loading,
+  } = useContext(TransactionsContext);
   const { userId } = useContext(AuthContext);
   const { colors } = useContext(ThemeContext);
-  const { loading } = useContext(TransactionsContext);
   const { matchesFilter, hasActiveFilter } = useContext(DateFilterContext);
 
   const [search, setSearch] = useState('');
@@ -201,6 +209,22 @@ export default function TransactionsScreen() {
         stickySectionHeadersEnabled={false}
         contentContainerStyle={{ paddingBottom: scaleHeight(160) }}
         showsVerticalScrollIndicator={false}
+        onEndReached={() => {
+          if (!userId || !hasMoreTransactions || loadingMore) return;
+          loadMoreTransactions(userId);
+        }}
+        onEndReachedThreshold={0.35}
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={{ paddingVertical: 16 }}>
+              <ActivityIndicator color={colors.accent} />
+            </View>
+          ) : txTotal != null && items.length < txTotal ? (
+            <AppText muted style={{ textAlign: 'center', paddingVertical: 12, fontSize: 12 }}>
+              Showing {items.length} of {txTotal}. Scroll for more.
+            </AppText>
+          ) : null
+        }
         ListEmptyComponent={() => (
           <View style={{ paddingTop: 30, alignItems: 'center' }}>
             {hasFilters ? (

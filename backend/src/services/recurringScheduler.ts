@@ -2,11 +2,19 @@ import { RecurringModel } from '../models/RecurringModel';
 import { TransactionModel } from '../models/TransactionModel';
 import { sendPushToUser } from './pushService';
 import { emitToUser } from '../socket';
+import { withRetries } from './retry';
+
+let isRunning = false;
 
 /**
  * Process all due recurring transactions.
  */
 async function processRecurringTransactions(): Promise<void> {
+  if (isRunning) {
+    console.warn('[Recurring] Previous run still in progress, skipping.');
+    return;
+  }
+  isRunning = true;
   try {
     const dueItems = await RecurringModel.getDueRecurrences();
 
@@ -19,16 +27,22 @@ async function processRecurringTransactions(): Promise<void> {
 
     for (const item of dueItems) {
       try {
-        const tx = await TransactionModel.create(
-          item.user_id,
-          item.title,
-          Number(item.amount),
-          item.category,
-          new Date().toISOString().slice(0, 10),
-          item.currency || 'LKR',
+        const tx = await withRetries(
+          () => TransactionModel.create(
+            item.user_id,
+            item.title,
+            Number(item.amount),
+            item.category,
+            new Date().toISOString().slice(0, 10),
+            item.currency || 'LKR',
+          ),
+          { retries: 2, delayMs: 500 }
         );
 
-        await RecurringModel.advanceNextRun(item.id, item.frequency);
+        await withRetries(
+          () => RecurringModel.advanceNextRun(item.id, item.frequency),
+          { retries: 2, delayMs: 500 }
+        );
 
         emitToUser(item.user_id, 'tx:new', {
           title: 'Recurring transaction created',
@@ -37,11 +51,14 @@ async function processRecurringTransactions(): Promise<void> {
         });
         emitToUser(item.user_id, 'tx:summary:invalidate', { user_id: item.user_id });
 
-        await sendPushToUser(
-          item.user_id,
-          `🔄 Recurring: ${item.title}`,
-          `${Number(item.amount) < 0 ? 'Expense' : 'Income'} of ${Math.abs(Number(item.amount)).toFixed(2)} ${item.currency || 'LKR'} for ${item.category} has been recorded.`,
-          { type: 'recurring_tx', transactionId: String(tx.id) }
+        await withRetries(
+          () => sendPushToUser(
+            item.user_id,
+            `🔄 Recurring: ${item.title}`,
+            `${Number(item.amount) < 0 ? 'Expense' : 'Income'} of ${Math.abs(Number(item.amount)).toFixed(2)} ${item.currency || 'LKR'} for ${item.category} has been recorded.`,
+            { type: 'recurring_tx', transactionId: String(tx.id) }
+          ),
+          { retries: 1, delayMs: 500 }
         );
 
         console.log(`[Recurring] Created tx for recurrence #${item.id} (${item.title}) user=${item.user_id}`);
@@ -51,6 +68,8 @@ async function processRecurringTransactions(): Promise<void> {
     }
   } catch (err) {
     console.error('[Recurring] Error fetching due recurrences:', err);
+  } finally {
+    isRunning = false;
   }
 }
 

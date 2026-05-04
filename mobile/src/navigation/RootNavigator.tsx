@@ -1,6 +1,7 @@
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, Modal, StyleSheet, View } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { appLinking } from './linking';
 
 import { AuthContext } from '../store/auth';
 import { TransactionsContext } from '../store/transactions';
@@ -12,6 +13,7 @@ import AppStack from './AppStack';
 import SplashScreen from '../views/SplashScreen';
 import { ProfileService } from '../services/ProfileService';
 import { promptForBiometricUnlock } from '../services/biometricAuth';
+import { flushOfflineOutbox } from '../services/offlineOutbox';
 
 import { NotificationsProvider, NotificationsContext } from '../store/notifications';
 import NotificationBanner from '../components/NotificationBanner';
@@ -263,6 +265,19 @@ function RootNavigatorInner() {
     };
   }, [userId, token, dataLoaded, fetchTransactions, loadProfile, setTheme, show]);
 
+  // Retry queued writes when the app returns online / foreground
+  useEffect(() => {
+    if (!userId) return;
+    const run = () => {
+      flushOfflineOutbox().catch(() => {});
+    };
+    run();
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') run();
+    });
+    return () => sub.remove();
+  }, [userId]);
+
   // Hide splash screen
   useEffect(() => {
     if (!isLoading && (!userId || dataLoaded)) {
@@ -288,7 +303,7 @@ function RootNavigatorInner() {
   }
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer linking={appLinking} theme={navTheme}>
       <NotificationBanner />
       {userEmail ? <AppStack /> : <AuthStack />}
 

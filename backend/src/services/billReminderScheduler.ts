@@ -2,6 +2,9 @@ import cron from 'node-cron';
 import { ReminderModel } from '../models/ReminderModel';
 import { sendPushToUser } from './pushService';
 import { emitToUser } from '../socket';
+import { withRetries } from './retry';
+
+let isRunning = false;
 
 function toISODate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -47,6 +50,11 @@ export class BillReminderScheduler {
   }
 
   static async checkAndSendReminders(): Promise<void> {
+    if (isRunning) {
+      console.warn('[Bill Reminder] Previous run still in progress, skipping.');
+      return;
+    }
+    isRunning = true;
     try {
       const today = toISODate(new Date());
       const dueRows = await ReminderModel.listDueForReminderDate(today);
@@ -62,12 +70,15 @@ export class BillReminderScheduler {
         const title = item.remind_days_before === 0 ? 'Bill Due Today' : 'Upcoming Bill Reminder';
         const body = buildReminderBody(item);
 
-        await sendPushToUser(String(item.user_id), title, body, {
-          type: 'bill_reminder',
-          reminderId: String(item.id),
-          dueDate: String(item.due_date),
-          remindDaysBefore: String(item.remind_days_before),
-        });
+        await withRetries(
+          () => sendPushToUser(String(item.user_id), title, body, {
+            type: 'bill_reminder',
+            reminderId: String(item.id),
+            dueDate: String(item.due_date),
+            remindDaysBefore: String(item.remind_days_before),
+          }),
+          { retries: 1, delayMs: 500 }
+        );
 
         emitToUser(String(item.user_id), 'reminder:due', {
           title,
@@ -75,10 +86,15 @@ export class BillReminderScheduler {
           reminder: item,
         });
 
-        await ReminderModel.markNotified(Number(item.id), today);
+        await withRetries(
+          () => ReminderModel.markNotified(Number(item.id), today),
+          { retries: 2, delayMs: 500 }
+        );
       }
     } catch (err) {
       console.error('[Bill Reminder] Error while checking reminders:', err);
+    } finally {
+      isRunning = false;
     }
   }
 }

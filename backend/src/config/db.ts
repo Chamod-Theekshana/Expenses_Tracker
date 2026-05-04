@@ -15,6 +15,7 @@ export async function initDB() {
             currency VARCHAR(10) DEFAULT 'USD',
             date_format VARCHAR(20) DEFAULT 'DD/MM/YYYY',
             biometric_enabled BOOLEAN NOT NULL DEFAULT false,
+            token_version INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`;
 
@@ -22,6 +23,7 @@ export async function initDB() {
         await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'USD'`;
         await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format VARCHAR(20) DEFAULT 'DD/MM/YYYY'`;
         await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS biometric_enabled BOOLEAN NOT NULL DEFAULT false`;
+        await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0`;
 
         // ✅ FCM tokens table (supports multiple devices per user)
         await sql`CREATE TABLE IF NOT EXISTS user_fcm_tokens(
@@ -43,6 +45,7 @@ export async function initDB() {
 
         await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS currency VARCHAR(10) NOT NULL DEFAULT 'LKR'`;
         await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS notes TEXT`;
+        await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`;
 
         await sql`CREATE TABLE IF NOT EXISTS transaction_splits(
             id SERIAL PRIMARY KEY,
@@ -77,8 +80,11 @@ export async function initDB() {
             name VARCHAR(255) NOT NULL,
             type VARCHAR(20) NOT NULL DEFAULT 'expense',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            deleted_at TIMESTAMP,
             UNIQUE(user_id, name)
         )`;
+
+        await sql`ALTER TABLE categories ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`;
 
         await sql`CREATE TABLE IF NOT EXISTS budgets(
             id SERIAL PRIMARY KEY,
@@ -92,6 +98,7 @@ export async function initDB() {
         )`;
 
         await sql`ALTER TABLE budgets ADD COLUMN IF NOT EXISTS currency VARCHAR(10) NOT NULL DEFAULT 'LKR'`;
+        await sql`ALTER TABLE budgets ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`;
 
         await sql`CREATE TABLE IF NOT EXISTS recurring_transactions(
             id SERIAL PRIMARY KEY,
@@ -107,6 +114,7 @@ export async function initDB() {
         )`;
 
         await sql`ALTER TABLE recurring_transactions ADD COLUMN IF NOT EXISTS currency VARCHAR(10) NOT NULL DEFAULT 'LKR'`;
+        await sql`ALTER TABLE recurring_transactions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`;
 
         await sql`CREATE TABLE IF NOT EXISTS reminders(
             id SERIAL PRIMARY KEY,
@@ -126,6 +134,7 @@ export async function initDB() {
         await sql`ALTER TABLE reminders ADD COLUMN IF NOT EXISTS remind_days_before INTEGER NOT NULL DEFAULT 1`;
         await sql`ALTER TABLE reminders ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true`;
         await sql`ALTER TABLE reminders ADD COLUMN IF NOT EXISTS last_notified_on DATE`;
+        await sql`ALTER TABLE reminders ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`;
         await sql`CREATE INDEX IF NOT EXISTS idx_reminders_user_id ON reminders(user_id)`;
         await sql`CREATE INDEX IF NOT EXISTS idx_reminders_due_date ON reminders(due_date)`;
         await sql`CREATE INDEX IF NOT EXISTS idx_reminders_user_active_due ON reminders(user_id, is_active, due_date)`;
@@ -143,6 +152,7 @@ export async function initDB() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`;
         await sql`ALTER TABLE goals ADD COLUMN IF NOT EXISTS is_completed BOOLEAN NOT NULL DEFAULT false`;
+        await sql`ALTER TABLE goals ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`;
 
         // ── Transaction Receipts ─────────────────────────────────────────
         await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS receipt_url TEXT`;

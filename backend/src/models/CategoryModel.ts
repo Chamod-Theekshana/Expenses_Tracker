@@ -9,14 +9,24 @@ export type CategoryRow = {
 };
 
 export class CategoryModel {
-  static async listByUser(userId: string): Promise<CategoryRow[]> {
+  static async listByUser(userId: string, limit: number, offset: number): Promise<CategoryRow[]> {
     const rows = await sql`
       SELECT id, user_id, name, type, created_at
       FROM categories
-      WHERE user_id = ${userId}
+      WHERE user_id = ${userId} AND deleted_at IS NULL
       ORDER BY name ASC
+      LIMIT ${limit} OFFSET ${offset}
     `;
     return rows as CategoryRow[];
+  }
+
+  static async countByUser(userId: string): Promise<number> {
+    const rows = await sql`
+      SELECT COUNT(*)::int AS count
+      FROM categories
+      WHERE user_id = ${userId} AND deleted_at IS NULL
+    `;
+    return Number((rows[0] as any)?.count || 0);
   }
 
   static async create(
@@ -41,7 +51,7 @@ export class CategoryModel {
     const rows = await sql`
       UPDATE categories
       SET name = ${name}, type = ${type}
-      WHERE id = ${id} AND user_id = ${userId}
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
       RETURNING id, user_id, name, type, created_at
     `;
     return (rows[0] as CategoryRow) || null;
@@ -49,15 +59,31 @@ export class CategoryModel {
 
   static async delete(userId: string, id: number): Promise<boolean> {
     const rows = await sql`
-      DELETE FROM categories
-      WHERE id = ${id} AND user_id = ${userId}
+      UPDATE categories
+      SET deleted_at = NOW()
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
       RETURNING id
     `;
     return rows.length > 0;
   }
 
+  static async bulkDeleteByUser(userId: string, ids: number[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const rows = await sql`
+      UPDATE categories
+      SET deleted_at = NOW()
+      WHERE user_id = ${userId}
+        AND deleted_at IS NULL
+        AND id = ANY(${ids}::int[])
+      RETURNING id
+    `;
+    return rows.length;
+  }
+
   static async seedDefaults(userId: string): Promise<void> {
-    const existing = await sql`SELECT COUNT(*)::int AS c FROM categories WHERE user_id = ${userId}`;
+    const existing = await sql`
+      SELECT COUNT(*)::int AS c FROM categories WHERE user_id = ${userId} AND deleted_at IS NULL
+    `;
     if (Number((existing[0] as any)?.c ?? 0) > 0) return;
 
     const defaults: Array<{ name: string; type: 'expense' | 'income' | 'both' }> = [

@@ -3,34 +3,22 @@ import { RecurringModel } from '../models/RecurringModel';
 import type { AuthedRequest } from '../middleware/requireAuth';
 import { emitToUser } from '../socket';
 
-const VALID_FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'];
-
 export async function listRecurring(req: AuthedRequest, res: Response) {
   const userId = String(req.user!.id);
-  const rows = await RecurringModel.listByUser(userId);
-  return res.json({ recurring: rows });
+  const { limit, offset } = (req as any).pagination || { limit: 50, offset: 0 };
+  const [rows, total] = await Promise.all([
+    RecurringModel.listByUser(userId, limit, offset),
+    RecurringModel.countByUser(userId),
+  ]);
+  return res.json({ recurring: rows, page: { limit, offset, total } });
 }
 
 export async function createRecurring(req: AuthedRequest, res: Response) {
   const userId = String(req.user!.id);
   const { title, amount, category, frequency, startDate } = req.body || {};
 
-  if (!title || typeof title !== 'string' || title.trim().length < 1) {
-    return res.status(400).json({ message: 'Title is required' });
-  }
-  if (!category || typeof category !== 'string' || category.trim().length < 1) {
-    return res.status(400).json({ message: 'Category is required' });
-  }
-
   const numAmount = Number(amount);
-  if (!Number.isFinite(numAmount) || numAmount === 0) {
-    return res.status(400).json({ message: 'Amount must be a non-zero number' });
-  }
-
   const freq = frequency || 'monthly';
-  if (!VALID_FREQUENCIES.includes(freq)) {
-    return res.status(400).json({ message: `Frequency must be one of: ${VALID_FREQUENCIES.join(', ')}` });
-  }
 
   // Calculate next_run as the first future date based on frequency
   const now = new Date();
@@ -42,21 +30,16 @@ export async function createRecurring(req: AuthedRequest, res: Response) {
   }
   const nextRun = startDate || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-  try {
-    const row = await RecurringModel.create(userId, title.trim(), numAmount, category.trim(), freq, nextRun);
+  const row = await RecurringModel.create(userId, title, numAmount, category, freq, nextRun);
 
-    // Socket notification (foreground/local only)
-    emitToUser(userId, 'recurring:created', {
-      title: '🔄 Recurring Added',
-      body: `${title.trim()} (${freq}) — ${formatAmount(numAmount)}`,
-      recurring: row,
-    });
+  // Socket notification (foreground/local only)
+  emitToUser(userId, 'recurring:created', {
+    title: '🔄 Recurring Added',
+    body: `${title} (${freq}) — ${formatAmount(numAmount)}`,
+    recurring: row,
+  });
 
-    return res.status(201).json({ recurring: row });
-  } catch (e: any) {
-    console.error('Error creating recurring transaction:', e);
-    return res.status(500).json({ message: 'Failed to create recurring transaction' });
-  }
+  return res.status(201).json({ recurring: row });
 }
 
 export async function updateRecurring(req: AuthedRequest, res: Response) {
@@ -64,22 +47,10 @@ export async function updateRecurring(req: AuthedRequest, res: Response) {
   const id = Number(req.params.id);
   const { title, amount, category, frequency, is_active } = req.body || {};
 
-  if (!id || isNaN(id)) {
-    return res.status(400).json({ message: 'Invalid recurring ID' });
-  }
-
-  if (frequency && !VALID_FREQUENCIES.includes(frequency)) {
-    return res.status(400).json({ message: `Frequency must be one of: ${VALID_FREQUENCIES.join(', ')}` });
-  }
-
   const fields: any = {};
-  if (title !== undefined) fields.title = String(title).trim();
-  if (amount !== undefined) {
-    const n = Number(amount);
-    if (!Number.isFinite(n) || n === 0) return res.status(400).json({ message: 'Amount must be a non-zero number' });
-    fields.amount = n;
-  }
-  if (category !== undefined) fields.category = String(category).trim();
+  if (title !== undefined) fields.title = title;
+  if (amount !== undefined) fields.amount = Number(amount);
+  if (category !== undefined) fields.category = category;
   if (frequency !== undefined) fields.frequency = frequency;
   if (is_active !== undefined) fields.is_active = Boolean(is_active);
 
@@ -91,10 +62,6 @@ export async function updateRecurring(req: AuthedRequest, res: Response) {
 export async function deleteRecurring(req: AuthedRequest, res: Response) {
   const userId = String(req.user!.id);
   const id = Number(req.params.id);
-
-  if (!id || isNaN(id)) {
-    return res.status(400).json({ message: 'Invalid recurring ID' });
-  }
 
   const existing = await RecurringModel.findById(userId, id);
   const ok = await RecurringModel.delete(userId, id);
@@ -109,6 +76,13 @@ export async function deleteRecurring(req: AuthedRequest, res: Response) {
   });
 
   return res.json({ message: 'Recurring transaction deleted' });
+}
+
+export async function bulkDeleteRecurring(req: AuthedRequest, res: Response) {
+  const userId = String(req.user!.id);
+  const ids = (req.body as { ids: number[] }).ids;
+  const deletedCount = await RecurringModel.bulkDeleteByUser(userId, ids);
+  return res.json({ message: 'Recurring rules deleted', deletedCount });
 }
 
 function formatAmount(amount: number): string {

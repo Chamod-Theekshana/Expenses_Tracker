@@ -15,7 +15,7 @@ export interface Goal {
 }
 
 export class GoalModel {
-  static async listByUser(userId: string): Promise<Goal[]> {
+  static async listByUser(userId: string, limit: number, offset: number): Promise<Goal[]> {
     const rows = await sql`
       SELECT 
         id, user_id, name, target_amount, current_amount, currency,
@@ -25,10 +25,20 @@ export class GoalModel {
           ELSE 0 
         END AS progress_percentage
       FROM goals
-      WHERE user_id = ${userId}
+      WHERE user_id = ${userId} AND deleted_at IS NULL
       ORDER BY is_completed ASC, created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
     `;
     return rows as Goal[];
+  }
+
+  static async countByUser(userId: string): Promise<number> {
+    const rows = await sql`
+      SELECT COUNT(*)::int AS count
+      FROM goals
+      WHERE user_id = ${userId} AND deleted_at IS NULL
+    `;
+    return Number((rows[0] as any)?.count || 0);
   }
 
   static async findById(userId: string, id: number): Promise<Goal | null> {
@@ -41,7 +51,7 @@ export class GoalModel {
           ELSE 0 
         END AS progress_percentage
       FROM goals
-      WHERE id = ${id} AND user_id = ${userId}
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
     `;
     return (rows[0] as Goal) || null;
   }
@@ -79,13 +89,13 @@ export class GoalModel {
       ? await sql`
           UPDATE goals
           SET name = ${name}, target_amount = ${targetAmount}, currency = ${currency}, deadline = ${deadline}
-          WHERE id = ${id} AND user_id = ${userId}
+          WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
           RETURNING *
         `
       : await sql`
           UPDATE goals
           SET name = ${name}, target_amount = ${targetAmount}, currency = ${currency}, deadline = NULL
-          WHERE id = ${id} AND user_id = ${userId}
+          WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
           RETURNING *
         `;
     return (rows[0] as Goal) || null;
@@ -104,7 +114,7 @@ export class GoalModel {
           WHEN (current_amount + ${amount}) >= target_amount THEN true 
           ELSE is_completed 
         END
-      WHERE id = ${id} AND user_id = ${userId}
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
       RETURNING *,
         CASE WHEN target_amount > 0 
           THEN ROUND((current_amount / target_amount) * 100, 1) 
@@ -115,6 +125,23 @@ export class GoalModel {
   }
 
   static async delete(userId: string, id: number): Promise<void> {
-    await sql`DELETE FROM goals WHERE id = ${id} AND user_id = ${userId}`;
+    await sql`
+      UPDATE goals
+      SET deleted_at = NOW()
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
+    `;
+  }
+
+  static async bulkDeleteByUser(userId: string, ids: number[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const rows = await sql`
+      UPDATE goals
+      SET deleted_at = NOW()
+      WHERE user_id = ${userId}
+        AND deleted_at IS NULL
+        AND id = ANY(${ids}::int[])
+      RETURNING id
+    `;
+    return rows.length;
   }
 }

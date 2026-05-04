@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { Alert, StyleSheet, View, Image, Pressable, ActivityIndicator, Modal, TextInput } from 'react-native';
 import * as ImagePicker from 'react-native-image-picker';
 import AppText from '../../components/AppText';
@@ -11,33 +11,84 @@ import Icon from '../../components/Icon';
 import { ThemeContext } from '../../store/theme';
 import { TransactionsContext, Tx } from '../../store/transactions';
 import { AuthContext } from '../../store/auth';
+import { TransactionService } from '../../services/TransactionService';
 import { uploadImageToCloudinary } from '../../utils/cloudinary';
 import { radius } from '../../theme/colors';
 import { scaleHeight } from '../../constants/size';
 import { mergeTags, parseTagInput } from '../../utils/tags';
 
 export default function TransactionDetailScreen({ route, navigation }: any) {
-  const { tx }: { tx: Tx } = route.params;
+  const routeTx = route.params?.tx as Tx | undefined;
+  const txIdParam = route.params?.txId as string | undefined;
+
   const { colors } = useContext(ThemeContext);
   const { updateTx, removeTx } = useContext(TransactionsContext);
   const { userId } = useContext(AuthContext);
 
-  const [title, setTitle] = useState(tx.title);
-  const [amountRaw, setAmountRaw] = useState(String(Math.abs(tx.amount)));
-  const [category, setCategory] = useState(tx.category);
-  const [dateISO, setDateISO] = useState(tx.dateISO?.slice(0, 10) || new Date().toISOString().slice(0, 10));
-  const [notes, setNotes] = useState(tx.notes || '');
-  const [tags, setTags] = useState<string[]>(mergeTags([], tx.tags || []));
+  const [resolvedTx, setResolvedTx] = useState<Tx | null>(routeTx ?? null);
+  const [txLoading, setTxLoading] = useState(() => !routeTx && Boolean(txIdParam));
+  const [txError, setTxError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (routeTx) {
+      setResolvedTx(routeTx);
+      setTxLoading(false);
+      return;
+    }
+    if (!txIdParam) {
+      setTxError('Missing transaction');
+      setTxLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setTxLoading(true);
+      setTxError(null);
+      try {
+        const t = await TransactionService.getTransactionById(txIdParam);
+        if (cancelled) return;
+        if (t) setResolvedTx(t);
+        else setTxError('Transaction not found');
+      } catch (e: any) {
+        if (!cancelled) setTxError(e?.message || 'Failed to load');
+      } finally {
+        if (!cancelled) setTxLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [routeTx, txIdParam]);
+
+  const [title, setTitle] = useState('');
+  const [amountRaw, setAmountRaw] = useState('');
+  const [category, setCategory] = useState('');
+  const [dateISO, setDateISO] = useState(new Date().toISOString().slice(0, 10));
+  const [notes, setNotes] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const [receiptUri, setReceiptUri] = useState<string | null>(tx.receiptUrl || null);
-  const [receiptUrl, setReceiptUrl] = useState<string | null>(tx.receiptUrl || null);
+  const [receiptUri, setReceiptUri] = useState<string | null>(null);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
-  const hasSplits = (tx.splits?.length || 0) > 0;
 
-  const isIncome = tx.amount > 0;
+  useEffect(() => {
+    if (!resolvedTx) return;
+    setTitle(resolvedTx.title);
+    setAmountRaw(String(Math.abs(resolvedTx.amount)));
+    setCategory(resolvedTx.category);
+    setDateISO(resolvedTx.dateISO?.slice(0, 10) || new Date().toISOString().slice(0, 10));
+    setNotes(resolvedTx.notes || '');
+    setTags(mergeTags([], resolvedTx.tags || []));
+    setReceiptUri(resolvedTx.receiptUrl || null);
+    setReceiptUrl(resolvedTx.receiptUrl || null);
+  }, [resolvedTx]);
+
+  const hasSplits = (resolvedTx?.splits?.length || 0) > 0;
+
+  const isIncome = (resolvedTx?.amount ?? 0) > 0;
   const amount = useMemo(() => {
     const n = Number(amountRaw);
     return Number.isFinite(n) ? n : 0;
@@ -47,9 +98,9 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
   const canSave = title.trim().length >= 2 && amount > 0 && dateOk && userId;
 
   const buildUpdatedSplits = () => {
-    if (!hasSplits) return undefined;
+    if (!hasSplits || !resolvedTx) return undefined;
 
-    const originalSplits = (tx.splits || []).filter((split) => String(split.category || '').trim().length > 0);
+    const originalSplits = (resolvedTx.splits || []).filter((split) => String(split.category || '').trim().length > 0);
     if (originalSplits.length < 2) {
       return undefined;
     }
@@ -149,13 +200,14 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
         setTags(finalTags);
       }
 
+      if (!resolvedTx) return;
       await updateTx(
-        tx.id,
+        resolvedTx.id,
         {
           title: title.trim(),
           category: effectiveCategory,
           amount: isIncome ? amount : -amount,
-          currency: tx.currency || 'LKR',
+          currency: resolvedTx.currency || 'LKR',
           dateISO,
           notes: cleanedNotes.length > 0 ? cleanedNotes : null,
           tags: finalTags,
@@ -174,12 +226,40 @@ export default function TransactionDetailScreen({ route, navigation }: any) {
     Alert.alert('Delete transaction', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
-        try { setSaving(true); await removeTx(tx.id, userId!); navigation.goBack(); }
+        try {
+            setSaving(true);
+            if (!resolvedTx) return;
+            await removeTx(resolvedTx.id, userId!);
+            navigation.goBack();
+          }
         catch (e: any) { Alert.alert('Error', e?.message || 'Failed to delete'); }
         finally { setSaving(false); }
       }},
     ]);
   };
+
+  if (txLoading) {
+    return (
+      <Screen preset="fixed" padded>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 40 }}>
+          <ActivityIndicator color={colors.accent} />
+          <AppText muted style={{ marginTop: 12 }}>Loading transaction…</AppText>
+        </View>
+      </Screen>
+    );
+  }
+
+  if (txError || !resolvedTx) {
+    return (
+      <Screen preset="fixed" padded>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 40 }}>
+          <AppText style={{ color: colors.text, textAlign: 'center' }}>{txError || 'Transaction not found'}</AppText>
+          <View style={{ height: 16 }} />
+          <AppButton title="Go back" onPress={() => navigation.goBack()} />
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen preset="scroll" padded contentContainerStyle={{paddingBottom: scaleHeight(40),

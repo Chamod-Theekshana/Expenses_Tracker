@@ -14,11 +14,12 @@ import Sidebar from '../components/Sidebar';
 import { ThemeContext } from '../store/theme';
 
 import GoalsScreen from '../views/app/GoalsScreen';
+import type { Tx } from '../store/transactions';
 
 export type AppStackParamList = {
   Tabs: undefined;
   AddTx: undefined;
-  TxDetail: { tx: any };
+  TxDetail: { tx?: Tx; txId?: string };
   Categories: undefined;
   Budgets: undefined;
   Reminders: undefined;

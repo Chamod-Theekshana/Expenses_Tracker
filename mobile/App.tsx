@@ -11,6 +11,7 @@ import { ProfileProvider } from './src/store/profile';
 import { SidebarProvider } from './src/store/sidebar';
 import { requestPushPermission, ensureNotifChannel, showLocalNotification } from './src/services/PushNotificationService';
 import { ToastProvider } from './src/components/Toast';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 
 function ThemedStatusBar() {
   const { theme, colors } = useContext(ThemeContext);
@@ -53,19 +54,21 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <ThemedStatusBar />
-        <ToastProvider>
-          <AuthProvider>
-            <ProfileProvider>
-              <SidebarProvider>
-                <TransactionsProvider>
-                  <DateFilterProvider>
-                    <RootNavigator />
-                  </DateFilterProvider>
-                </TransactionsProvider>
-              </SidebarProvider>
-            </ProfileProvider>
-          </AuthProvider>
-        </ToastProvider>
+        <ErrorBoundary>
+          <ToastProvider>
+            <AuthProvider>
+              <ProfileProvider>
+                <SidebarProvider>
+                  <TransactionsProvider>
+                    <DateFilterProvider>
+                      <RootNavigator />
+                    </DateFilterProvider>
+                  </TransactionsProvider>
+                </SidebarProvider>
+              </ProfileProvider>
+            </AuthProvider>
+          </ToastProvider>
+        </ErrorBoundary>
       </ThemeProvider>
     </SafeAreaProvider>
   );

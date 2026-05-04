@@ -1,6 +1,9 @@
 import cron from 'node-cron';
 import { sql } from '../config/db';
 import { sendPushToUser } from './pushService';
+import { withRetries } from './retry';
+
+let isRunning = false;
 
 export class GoalReminderService {
   /**
@@ -18,6 +21,11 @@ export class GoalReminderService {
   }
 
   static async checkAndSendReminders(): Promise<void> {
+    if (isRunning) {
+      console.warn('[Goal Reminder] Previous run still in progress, skipping.');
+      return;
+    }
+    isRunning = true;
     try {
       const rows = await sql`
         SELECT
@@ -65,15 +73,20 @@ export class GoalReminderService {
           messageBody = `Keep saving for "${row.name}"! You're ${row.progress_percentage}% there.`;
         }
 
-        await sendPushToUser(
-          String(row.user_id),
-          'Goal Reminder 🎯',
-          messageBody,
-          { type: 'goal_reminder', goalId: String(row.id) }
+        await withRetries(
+          () => sendPushToUser(
+            String(row.user_id),
+            'Goal Reminder 🎯',
+            messageBody,
+            { type: 'goal_reminder', goalId: String(row.id) }
+          ),
+          { retries: 1, delayMs: 500 }
         );
       }
     } catch (err) {
       console.error('[Goal Reminder] Error checking goals:', err);
+    } finally {
+      isRunning = false;
     }
   }
 }

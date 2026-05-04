@@ -14,21 +14,31 @@ export type RecurringRow = {
 };
 
 export class RecurringModel {
-  static async listByUser(userId: string): Promise<RecurringRow[]> {
+  static async listByUser(userId: string, limit: number, offset: number): Promise<RecurringRow[]> {
     const rows = await sql`
       SELECT id, user_id, title, amount, category, frequency, next_run, is_active, created_at
       FROM recurring_transactions
-      WHERE user_id = ${userId}
+      WHERE user_id = ${userId} AND deleted_at IS NULL
       ORDER BY next_run ASC
+      LIMIT ${limit} OFFSET ${offset}
     `;
     return rows as RecurringRow[];
+  }
+
+  static async countByUser(userId: string): Promise<number> {
+    const rows = await sql`
+      SELECT COUNT(*)::int AS count
+      FROM recurring_transactions
+      WHERE user_id = ${userId} AND deleted_at IS NULL
+    `;
+    return Number((rows[0] as any)?.count || 0);
   }
 
   static async findById(userId: string, id: number): Promise<RecurringRow | null> {
     const rows = await sql`
       SELECT id, user_id, title, amount, category, frequency, next_run, is_active, created_at
       FROM recurring_transactions
-      WHERE id = ${id} AND user_id = ${userId}
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
     `;
     return (rows[0] as RecurringRow) || null;
   }
@@ -62,7 +72,7 @@ export class RecurringModel {
         category = COALESCE(${fields.category ?? null}, category),
         frequency = COALESCE(${fields.frequency ?? null}, frequency),
         is_active = COALESCE(${fields.is_active ?? null}, is_active)
-      WHERE id = ${id} AND user_id = ${userId}
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
       RETURNING id, user_id, title, amount, category, frequency, next_run, is_active, created_at
     `;
     return (rows[0] as RecurringRow) || null;
@@ -70,11 +80,25 @@ export class RecurringModel {
 
   static async delete(userId: string, id: number): Promise<boolean> {
     const rows = await sql`
-      DELETE FROM recurring_transactions
-      WHERE id = ${id} AND user_id = ${userId}
+      UPDATE recurring_transactions
+      SET deleted_at = NOW()
+      WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
       RETURNING id
     `;
     return rows.length > 0;
+  }
+
+  static async bulkDeleteByUser(userId: string, ids: number[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const rows = await sql`
+      UPDATE recurring_transactions
+      SET deleted_at = NOW()
+      WHERE user_id = ${userId}
+        AND deleted_at IS NULL
+        AND id = ANY(${ids}::int[])
+      RETURNING id
+    `;
+    return rows.length;
   }
 
   /**
@@ -90,6 +114,7 @@ export class RecurringModel {
       SELECT id, user_id, title, amount, category, frequency, next_run, is_active, created_at
       FROM recurring_transactions
       WHERE is_active = true
+        AND deleted_at IS NULL
         AND (next_run AT TIME ZONE 'UTC')::date <= ${today}::date
       ORDER BY next_run ASC
     `;

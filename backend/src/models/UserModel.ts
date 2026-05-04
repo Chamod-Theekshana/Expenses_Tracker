@@ -11,6 +11,7 @@ export interface User {
   date_format?: string | null;
   biometric_enabled?: boolean | null;
   created_at?: Date;
+  token_version?: number | null;
 }
 
 export class UserModel {
@@ -79,5 +80,23 @@ export class UserModel {
 
   static async updatePassword(userId: string, hashedPassword: string): Promise<void> {
     await sql`UPDATE users SET password = ${hashedPassword} WHERE id = ${userId}`;
+  }
+
+  static async getTokenVersion(userId: string): Promise<number | null> {
+    const result = await sql`SELECT token_version FROM users WHERE id = ${userId}`;
+    const row = result[0] as any;
+    if (!row) return null;
+    return Number(row.token_version || 0);
+  }
+
+  static async incrementTokenVersion(userId: string): Promise<number> {
+    const result = await sql`
+      UPDATE users
+      SET token_version = COALESCE(token_version, 0) + 1
+      WHERE id = ${userId}
+      RETURNING token_version
+    `;
+    const row = result[0] as any;
+    return Number(row?.token_version || 0);
   }
 }

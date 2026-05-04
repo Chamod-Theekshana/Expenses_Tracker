@@ -1,6 +1,8 @@
 import React, { createContext, useCallback, useMemo, useState } from 'react';
 import { TransactionService } from '../services/TransactionService';
 
+const PAGE_SIZE = 200;
+
 export type TxSplit = {
   id?: string;
   category: string;
@@ -21,12 +23,27 @@ export type Tx = {
   splits?: TxSplit[];
 };
 
+function dedupeById(list: Tx[]): Tx[] {
+  const seen = new Set<string>();
+  const out: Tx[] = [];
+  for (const t of list) {
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    out.push(t);
+  }
+  return out;
+}
+
 type Ctx = {
   items: Tx[];
+  txTotal: number | null;
+  hasMoreTransactions: boolean;
+  loadingMore: boolean;
   addTx: (tx: Omit<Tx, 'id'>, userId: string) => Promise<void>;
   updateTx: (id: string, tx: Omit<Tx, 'id'>, userId: string) => Promise<void>;
   removeTx: (id: string, userId: string) => Promise<void>;
   fetchTransactions: (userId: string) => Promise<void>;
+  loadMoreTransactions: (userId: string) => Promise<void>;
   clearTransactions: () => void;
   loading: boolean;
   error: string | null;
@@ -34,10 +51,14 @@ type Ctx = {
 
 export const TransactionsContext = createContext<Ctx>({
   items: [],
+  txTotal: null,
+  hasMoreTransactions: false,
+  loadingMore: false,
   addTx: async () => {},
   updateTx: async () => {},
   removeTx: async () => {},
   fetchTransactions: async () => {},
+  loadMoreTransactions: async () => {},
   clearTransactions: () => {},
   loading: false,
   error: null,
@@ -45,15 +66,23 @@ export const TransactionsContext = createContext<Ctx>({
 
 export function TransactionsProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<Tx[]>([]);
+  const [txTotal, setTxTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const hasMoreTransactions = txTotal != null && items.length < txTotal;
 
   const fetchTransactions = useCallback(async (userId: string) => {
     try {
       setLoading(true);
       setError(null);
-      const transactions = await TransactionService.getTransactions(userId);
-      setItems(transactions);
+      const { transactions, page } = await TransactionService.getTransactions(userId, {
+        limit: PAGE_SIZE,
+        offset: 0,
+      });
+      setItems(dedupeById(transactions));
+      setTxTotal(page.total);
     } catch (err: any) {
       const msg = err?.message || 'Failed to load transactions';
       setError(msg);
@@ -62,6 +91,27 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
       setLoading(false);
     }
   }, []);
+
+  const loadMoreTransactions = useCallback(async (userId: string) => {
+    if (txTotal != null && items.length >= txTotal) return;
+    try {
+      setLoadingMore(true);
+      setError(null);
+      const offset = items.length;
+      const { transactions, page } = await TransactionService.getTransactions(userId, {
+        limit: PAGE_SIZE,
+        offset,
+      });
+      setTxTotal(page.total);
+      setItems((prev) => dedupeById([...prev, ...transactions]));
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to load more';
+      setError(msg);
+      console.error('[Transactions] loadMoreTransactions error:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [items.length, txTotal]);
 
   const addTx = useCallback(
     async (tx: Omit<Tx, 'id'>, userId: string) => {
@@ -77,7 +127,6 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
         tx.notes,
         tx.tags,
       );
-      // Refresh to get server-assigned ID and confirmed data
       await fetchTransactions(userId);
     },
     [fetchTransactions],
@@ -103,12 +152,11 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
   );
 
   const removeTx = useCallback(async (id: string, userId: string) => {
-    // Optimistic removal for instant UI feedback
     setItems((prev) => prev.filter((t) => t.id !== id));
+    setTxTotal((t) => (t != null ? Math.max(0, t - 1) : t));
     try {
       await TransactionService.deleteTransaction(id);
     } catch (err) {
-      // Restore on failure
       console.error('[Transactions] removeTx failed, restoring:', err);
       await fetchTransactions(userId);
       throw err;
@@ -117,12 +165,39 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
 
   const clearTransactions = useCallback(() => {
     setItems([]);
+    setTxTotal(null);
     setError(null);
   }, []);
 
   const value = useMemo(
-    () => ({ items, addTx, updateTx, removeTx, fetchTransactions, clearTransactions, loading, error }),
-    [items, addTx, updateTx, removeTx, fetchTransactions, clearTransactions, loading, error],
+    () => ({
+      items,
+      txTotal,
+      hasMoreTransactions,
+      loadingMore,
+      addTx,
+      updateTx,
+      removeTx,
+      fetchTransactions,
+      loadMoreTransactions,
+      clearTransactions,
+      loading,
+      error,
+    }),
+    [
+      items,
+      txTotal,
+      hasMoreTransactions,
+      loadingMore,
+      addTx,
+      updateTx,
+      removeTx,
+      fetchTransactions,
+      loadMoreTransactions,
+      clearTransactions,
+      loading,
+      error,
+    ],
   );
 
   return <TransactionsContext.Provider value={value}>{children}</TransactionsContext.Provider>;

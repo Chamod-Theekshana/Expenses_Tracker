@@ -4,6 +4,19 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TAG_REGEX = /^[a-z0-9][a-z0-9_-]{0,29}$/i;
 
+function isValidDateString(value: string): boolean {
+  if (!DATE_REGEX.test(value)) return false;
+  const d = new Date(value);
+  return !Number.isNaN(d.getTime());
+}
+
+function normalizeCurrency(value: any, fallback: string = 'LKR'): string {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value !== 'string') return fallback;
+  const cleaned = value.trim().toUpperCase();
+  return cleaned || fallback;
+}
+
 export function requireJson(req: Request, res: Response, next: NextFunction) {
   if (
     (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') &&
@@ -290,6 +303,245 @@ export function validateProfileUpdateBody(req: Request, res: Response, next: Nex
   next();
 }
 
+export function validateBudgetBody(req: Request, res: Response, next: NextFunction) {
+  const { category, amount, currency, period } = req.body ?? {};
+
+  if (!category || typeof category !== 'string' || category.trim().length < 1) {
+    return res.status(400).json({ message: 'Category is required' });
+  }
+  if (category.trim().length > 255) {
+    return res.status(400).json({ message: 'Category is too long' });
+  }
+
+  const numAmount = Number(amount);
+  if (!Number.isFinite(numAmount) || numAmount <= 0) {
+    return res.status(400).json({ message: 'Amount must be a positive number' });
+  }
+  if (numAmount > 1_000_000_000) {
+    return res.status(400).json({ message: 'Amount is too large' });
+  }
+
+  const p = (period || 'monthly') as string;
+  if (!['monthly'].includes(p)) {
+    return res.status(400).json({ message: 'Period must be: monthly' });
+  }
+
+  const c = normalizeCurrency(currency, 'LKR');
+  if (c.length < 3 || c.length > 10) {
+    return res.status(400).json({ message: 'currency must be between 3 and 10 characters' });
+  }
+
+  (req.body as any).category = category.trim();
+  (req.body as any).amount = numAmount;
+  (req.body as any).currency = c;
+  (req.body as any).period = p;
+  next();
+}
+
+export function validateBudgetUpdateBody(req: Request, res: Response, next: NextFunction) {
+  const { amount } = req.body ?? {};
+  const numAmount = Number(amount);
+  if (!Number.isFinite(numAmount) || numAmount <= 0) {
+    return res.status(400).json({ message: 'Amount must be a positive number' });
+  }
+  if (numAmount > 1_000_000_000) {
+    return res.status(400).json({ message: 'Amount is too large' });
+  }
+  (req.body as any).amount = numAmount;
+  next();
+}
+
+export function validateCategoryBody(req: Request, res: Response, next: NextFunction) {
+  const { name, type } = req.body ?? {};
+  if (!name || typeof name !== 'string' || name.trim().length < 2) {
+    return res.status(400).json({ message: 'Category name is required' });
+  }
+  if (name.trim().length > 255) {
+    return res.status(400).json({ message: 'Category name is too long' });
+  }
+
+  const t = (type || 'expense') as 'expense' | 'income' | 'both';
+  if (!['expense', 'income', 'both'].includes(t)) {
+    return res.status(400).json({ message: 'Invalid category type' });
+  }
+
+  (req.body as any).name = name.trim();
+  (req.body as any).type = t;
+  next();
+}
+
+export function validateGoalBody(req: Request, res: Response, next: NextFunction) {
+  const { name, target_amount, currency, deadline } = req.body ?? {};
+
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ message: 'Goal name is required' });
+  }
+  if (name.trim().length > 200) {
+    return res.status(400).json({ message: 'Goal name must be 200 characters or fewer' });
+  }
+
+  const amount = Number(target_amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ message: 'target_amount must be a positive number' });
+  }
+  if (amount > 1_000_000_000) {
+    return res.status(400).json({ message: 'target_amount is too large' });
+  }
+
+  let normalizedDeadline: string | null = null;
+  if (deadline) {
+    const s = String(deadline).trim();
+    if (!isValidDateString(s)) {
+      return res.status(400).json({ message: 'deadline must be a valid YYYY-MM-DD date' });
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const d = new Date(s);
+    d.setHours(0, 0, 0, 0);
+    if (d.getTime() < today.getTime()) {
+      return res.status(400).json({ message: 'Deadline cannot be in the past' });
+    }
+    normalizedDeadline = s;
+  }
+
+  const cur = normalizeCurrency(currency, 'LKR');
+  if (cur.length < 3 || cur.length > 10) {
+    return res.status(400).json({ message: 'currency must be between 3 and 10 characters' });
+  }
+
+  (req.body as any).name = name.trim();
+  (req.body as any).target_amount = amount;
+  (req.body as any).currency = cur;
+  (req.body as any).deadline = normalizedDeadline;
+  next();
+}
+
+export function validateGoalUpdateBody(req: Request, res: Response, next: NextFunction) {
+  return validateGoalBody(req, res, next);
+}
+
+export function validateGoalContributionBody(req: Request, res: Response, next: NextFunction) {
+  const { amount, currency } = req.body ?? {};
+  const numAmount = Number(amount);
+  if (!Number.isFinite(numAmount) || numAmount <= 0) {
+    return res.status(400).json({ message: 'amount must be a positive number' });
+  }
+  const cur = normalizeCurrency(currency, 'LKR');
+  if (cur.length < 3 || cur.length > 10) {
+    return res.status(400).json({ message: 'currency must be between 3 and 10 characters' });
+  }
+  (req.body as any).amount = numAmount;
+  (req.body as any).currency = cur;
+  next();
+}
+
+export function validateRecurringBody(req: Request, res: Response, next: NextFunction) {
+  const { title, amount, category, frequency, startDate } = req.body ?? {};
+  const VALID_FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'];
+
+  if (!title || typeof title !== 'string' || title.trim().length < 1) {
+    return res.status(400).json({ message: 'Title is required' });
+  }
+  if (title.trim().length > 200) {
+    return res.status(400).json({ message: 'Title must be 200 characters or fewer' });
+  }
+
+  if (!category || typeof category !== 'string' || category.trim().length < 1) {
+    return res.status(400).json({ message: 'Category is required' });
+  }
+  if (category.trim().length > 255) {
+    return res.status(400).json({ message: 'Category is too long' });
+  }
+
+  const numAmount = Number(amount);
+  if (!Number.isFinite(numAmount) || numAmount === 0) {
+    return res.status(400).json({ message: 'Amount must be a non-zero number' });
+  }
+  if (Math.abs(numAmount) > 1_000_000_000) {
+    return res.status(400).json({ message: 'Amount is too large' });
+  }
+
+  const freq = frequency || 'monthly';
+  if (!VALID_FREQUENCIES.includes(freq)) {
+    return res.status(400).json({ message: `Frequency must be one of: ${VALID_FREQUENCIES.join(', ')}` });
+  }
+
+  if (startDate !== undefined && startDate !== null && String(startDate).trim() !== '') {
+    const s = String(startDate).trim();
+    if (!isValidDateString(s)) {
+      return res.status(400).json({ message: 'startDate must be a valid YYYY-MM-DD date' });
+    }
+    (req.body as any).startDate = s;
+  } else {
+    (req.body as any).startDate = undefined;
+  }
+
+  (req.body as any).title = title.trim();
+  (req.body as any).category = category.trim();
+  (req.body as any).amount = numAmount;
+  (req.body as any).frequency = freq;
+  next();
+}
+
+export function validateRecurringUpdateBody(req: Request, res: Response, next: NextFunction) {
+  const { title, amount, category, frequency, is_active } = req.body ?? {};
+  const VALID_FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'];
+
+  if (title !== undefined) {
+    if (typeof title !== 'string' || title.trim().length < 1) {
+      return res.status(400).json({ message: 'Title must be a non-empty string' });
+    }
+    if (title.trim().length > 200) {
+      return res.status(400).json({ message: 'Title must be 200 characters or fewer' });
+    }
+    (req.body as any).title = title.trim();
+  }
+
+  if (category !== undefined) {
+    if (typeof category !== 'string' || category.trim().length < 1) {
+      return res.status(400).json({ message: 'Category must be a non-empty string' });
+    }
+    if (category.trim().length > 255) {
+      return res.status(400).json({ message: 'Category is too long' });
+    }
+    (req.body as any).category = category.trim();
+  }
+
+  if (amount !== undefined) {
+    const numAmount = Number(amount);
+    if (!Number.isFinite(numAmount) || numAmount === 0) {
+      return res.status(400).json({ message: 'Amount must be a non-zero number' });
+    }
+    if (Math.abs(numAmount) > 1_000_000_000) {
+      return res.status(400).json({ message: 'Amount is too large' });
+    }
+    (req.body as any).amount = numAmount;
+  }
+
+  if (frequency !== undefined) {
+    if (!VALID_FREQUENCIES.includes(frequency)) {
+      return res.status(400).json({ message: `Frequency must be one of: ${VALID_FREQUENCIES.join(', ')}` });
+    }
+    (req.body as any).frequency = frequency;
+  }
+
+  if (is_active !== undefined) {
+    (req.body as any).is_active = Boolean(is_active);
+  }
+
+  if (
+    title === undefined &&
+    amount === undefined &&
+    category === undefined &&
+    frequency === undefined &&
+    is_active === undefined
+  ) {
+    return res.status(400).json({ message: 'At least one field must be provided' });
+  }
+
+  next();
+}
+
 export function validateEmailBody(req: Request, res: Response, next: NextFunction) {
   const { email } = req.body ?? {};
   if (!email || !EMAIL_REGEX.test(String(email))) {
@@ -297,4 +549,51 @@ export function validateEmailBody(req: Request, res: Response, next: NextFunctio
   }
   (req.body as any).email = String(email).toLowerCase().trim();
   next();
+}
+
+export function parsePagination(defaultLimit = 50, maxLimit = 200) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const rawLimit = req.query.limit ?? defaultLimit;
+    const rawOffset = req.query.offset ?? 0;
+
+    const limit = Number(rawLimit);
+    const offset = Number(rawOffset);
+
+    if (!Number.isFinite(limit) || limit < 1) {
+      return res.status(400).json({ message: 'limit must be a positive number' });
+    }
+    if (!Number.isFinite(offset) || offset < 0) {
+      return res.status(400).json({ message: 'offset must be 0 or greater' });
+    }
+
+    const normalizedLimit = Math.min(Math.floor(limit), maxLimit);
+    const normalizedOffset = Math.floor(offset);
+
+    (req as any).pagination = { limit: normalizedLimit, offset: normalizedOffset };
+    next();
+  };
+}
+
+const MAX_BULK_IDS = 200;
+
+export function validateIdListBody(field: string = 'ids') {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const ids = (req.body as any)?.[field];
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: `${field} must be a non-empty array` });
+    }
+    if (ids.length > MAX_BULK_IDS) {
+      return res.status(400).json({ message: `${field} cannot exceed ${MAX_BULK_IDS} items` });
+    }
+    const parsed: number[] = [];
+    for (const id of ids) {
+      const num = Number(id);
+      if (!Number.isInteger(num) || num <= 0) {
+        return res.status(400).json({ message: `${field} must contain positive integers` });
+      }
+      parsed.push(num);
+    }
+    (req.body as any)[field] = parsed;
+    next();
+  };
 }

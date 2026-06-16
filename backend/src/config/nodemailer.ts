@@ -1,10 +1,17 @@
 import nodemailer from 'nodemailer';
 import 'dotenv/config';
 
+const smtpPort = Number(process.env.SMTP_PORT) || 465;
+
 export const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: false,
+  // Port 465 = direct SSL (secure:true)  — not blocked by most ISPs.
+  // Port 587 = STARTTLS (secure:false)   — often blocked by ISPs in South Asia.
+  port: smtpPort,
+  secure: smtpPort === 465,
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
+  socketTimeout: 20000,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,

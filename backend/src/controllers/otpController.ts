@@ -25,7 +25,14 @@ export async function sendOTP(req: Request, res: Response) {
   storeOTP(normalizedEmail, otp);
   updateResendTime(normalizedEmail);
 
-  await sendOTPEmail(normalizedEmail, otp);
+  try {
+    await sendOTPEmail(normalizedEmail, otp);
+  } catch (emailErr: any) {
+    console.error('[OTP] Failed to send OTP email:', emailErr?.message || emailErr);
+    return res.status(503).json({
+      message: 'Failed to send OTP email. Please check your internet connection or try again later.',
+    });
+  }
 
   return res.status(200).json({ message: 'OTP sent to email' });
 }

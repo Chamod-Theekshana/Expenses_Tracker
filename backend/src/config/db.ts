@@ -1,10 +1,39 @@
 import { neon } from "@neondatabase/serverless"
 import 'dotenv/config';
 
+
 export const sql = neon(process.env.DATABASE_URL!);
 
+const INIT_RETRIES = 3;
+const INIT_RETRY_DELAY_MS = 3000;
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function initDB() {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= INIT_RETRIES; attempt++) {
     try {
+      await _runMigrations();
+      console.log('Database initialized successfully');
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < INIT_RETRIES) {
+        console.warn(`[DB] Init attempt ${attempt}/${INIT_RETRIES} failed, retrying in ${INIT_RETRY_DELAY_MS / 1000}s...`, (error as any)?.message);
+        await sleep(INIT_RETRY_DELAY_MS);
+      }
+    }
+  }
+
+  console.error('Error initializing database', lastError);
+  process.exit(1);
+}
+
+async function _runMigrations() {
+
         await sql`CREATE TABLE IF NOT EXISTS users(
             id SERIAL PRIMARY KEY,
             email VARCHAR(255) UNIQUE NOT NULL,
@@ -156,10 +185,4 @@ export async function initDB() {
 
         // ── Transaction Receipts ─────────────────────────────────────────
         await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS receipt_url TEXT`;
-
-        console.log('Database initialized successfully')
-    } catch (error) {
-        console.error('Error initializing database', error)
-        process.exit(1)
-    }
-}
+}

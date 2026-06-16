@@ -33,7 +33,7 @@ export default function ProfileScreen({ navigation }: any) {
   const { userEmail, userId, signOut } = useContext(AuthContext);
   const [exportingBackup, setExportingBackup] = useState(false);
   const insets = useSafeAreaInsets();
-  const { theme, colors, setTheme } = useContext(ThemeContext);
+  const { theme, colors } = useContext(ThemeContext);
   const {
     name: profileName,
     profilePhoto,
@@ -41,15 +41,12 @@ export default function ProfileScreen({ navigation }: any) {
     dateFormat,
     updateName,
     updatePhoto,
-    updateCurrency,
-    updateDateFormat,
     biometricEnabled,
     updateBiometricEnabled,
   } = useContext(ProfileContext);
 
   const [manageVisible, setManageVisible] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const [prefsVisible, setPrefsVisible] = useState(false);
 
   const [firstNameDraft, setFirstNameDraft] = useState('');
   const [surnameDraft, setSurnameDraft] = useState('');
@@ -101,25 +98,6 @@ export default function ProfileScreen({ navigation }: any) {
   const displayCurrency = currency || 'USD';
   const displayDateFormat = dateFormat || 'DD/MM/YYYY';
 
-  const currencyOptions = useMemo(
-    () => [
-      { label: 'USD - US Dollar', value: 'USD' },
-      { label: 'LKR - Sri Lankan Rupee', value: 'LKR' },
-      { label: 'GBP - British Pound', value: 'GBP' },
-      { label: 'EUR - Euro', value: 'EUR' },
-    ],
-    [],
-  );
-
-  const dateFormatOptions = useMemo(
-    () => [
-      { label: 'DD/MM/YYYY', value: 'DD/MM/YYYY' },
-      { label: 'MM/DD/YYYY', value: 'MM/DD/YYYY' },
-      { label: 'YYYY-MM-DD', value: 'YYYY-MM-DD' },
-    ],
-    [],
-  );
-
   const genderOptions = useMemo(
     () => [
       { label: 'Male', value: 'Male' },
@@ -129,8 +107,6 @@ export default function ProfileScreen({ navigation }: any) {
     ],
     [],
   );
-
-  const themeOptions = useMemo(() => [{ label: 'Light Mode', value: 'light' }, { label: 'Dark Mode', value: 'dark' }], []);
 
   const openManageProfile = () => {
     const { firstName, surname } = splitProfileName(profileName || '');
@@ -283,31 +259,7 @@ export default function ProfileScreen({ navigation }: any) {
     }
   };
 
-  const handleThemeChange = async (value: string) => {
-    const next = value === 'light' ? 'light' : 'dark';
-    try {
-      await ProfileService.updateProfile(userId, { theme: next });
-      setTheme(next);
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to update theme');
-    }
-  };
 
-  const handleCurrencyChange = async (value: string) => {
-    try {
-      await updateCurrency(userId, value);
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to update currency');
-    }
-  };
-
-  const handleDateFormatChange = async (value: string) => {
-    try {
-      await updateDateFormat(userId, value);
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to update date format');
-    }
-  };
 
   type Row = {
     title: string;
@@ -369,19 +321,19 @@ export default function ProfileScreen({ navigation }: any) {
           title: 'Theme',
           icon: theme === 'light' ? ('sun' as const) : ('moon' as const),
           rightText: displayTheme,
-          onPress: () => setPrefsVisible(true),
+          onPress: () => navigation.navigate('ChangeTheme'),
         },
         {
           title: 'Default Currency',
           icon: 'dollar-sign' as const,
           rightText: displayCurrency,
-          onPress: () => setPrefsVisible(true),
+          onPress: () => navigation.navigate('DefaultCurrency'),
         },
         {
           title: 'Date Format',
           icon: 'calendar' as const,
           rightText: displayDateFormat,
-          onPress: () => setPrefsVisible(true),
+          onPress: () => navigation.navigate('DateFormat'),
         },
       ] satisfies Row[],
       support: [
@@ -705,27 +657,7 @@ export default function ProfileScreen({ navigation }: any) {
         </View>
       </BottomSheet>
 
-      <BottomSheet visible={prefsVisible} title="Preferences" onClose={() => setPrefsVisible(false)}>
-        <AppText muted style={styles.fieldLabel}>
-          Theme
-        </AppText>
-        <AppPicker options={themeOptions} value={theme} onValueChange={handleThemeChange} />
 
-        <View style={{ height: 14 }} />
-        <AppText muted style={styles.fieldLabel}>
-          Default Currency
-        </AppText>
-        <AppPicker options={currencyOptions} value={displayCurrency} onValueChange={handleCurrencyChange} />
-
-        <View style={{ height: 14 }} />
-        <AppText muted style={styles.fieldLabel}>
-          Date Format
-        </AppText>
-        <AppPicker options={dateFormatOptions} value={displayDateFormat} onValueChange={handleDateFormatChange} />
-
-        <View style={{ height: 16 }} />
-        <AppButton title="Done" variant="secondary" onPress={() => setPrefsVisible(false)} />
-      </BottomSheet>
     </View>
   );
 }

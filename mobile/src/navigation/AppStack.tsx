@@ -10,6 +10,9 @@ import CategoriesScreen from '../views/app/CategoriesScreen';
 import BudgetsScreen from '../views/app/BudgetsScreen';
 import RecurringScreen from '../views/app/RecurringScreen';
 import RemindersScreen from '../views/app/RemindersScreen';
+import ChangeThemeScreen from '../views/app/ChangeThemeScreen';
+import DefaultCurrencyScreen from '../views/app/DefaultCurrencyScreen';
+import DateFormatScreen from '../views/app/DateFormatScreen';
 import Sidebar from '../components/Sidebar';
 import { ThemeContext } from '../store/theme';
 
@@ -25,6 +28,9 @@ export type AppStackParamList = {
   Reminders: undefined;
   Recurring: undefined;
   Goals: undefined;
+  ChangeTheme: undefined;
+  DefaultCurrency: undefined;
+  DateFormat: undefined;
 };
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
@@ -104,6 +110,21 @@ export default function AppStack() {
           presentation: 'modal',
           animation: 'slide_from_bottom',
         }}
+      />
+      <Stack.Screen
+        name="ChangeTheme"
+        component={ChangeThemeScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="DefaultCurrency"
+        component={DefaultCurrencyScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="DateFormat"
+        component={DateFormatScreen}
+        options={{ animation: 'slide_from_right' }}
       />
     </Stack.Navigator>
   );

@@ -37,7 +37,14 @@ export async function sendPasskey(req: any, res: any) {
   const otp = generateOTP();
   storeOTP(normalizedEmail, otp);
 
-  await sendPasskeyEmail(normalizedEmail, otp);
+  try {
+    await sendPasskeyEmail(normalizedEmail, otp);
+  } catch (emailErr: any) {
+    console.error('[Signup] Failed to send passkey email:', emailErr?.message || emailErr);
+    return res.status(503).json({
+      message: 'Failed to send email. Please check your internet connection or try again later.',
+    });
+  }
 
   res.status(200).json({ message: 'Passkey sent to email' });
 }

@@ -336,6 +336,7 @@ export default function HomeScreen({ navigation }: any) {
             <View style={styles.headerLeftChild}>
               <View style={styles.balanceTop}>
                 <AppText style={[styles.balanceTitle, { color: colors.text }]}>Total Balance</AppText>
+
                 <AppText style={[styles.balanceSub, { color: colors.muted }]}>Amount as of {displayDateLine}</AppText>
                 <AppText style={[styles.balanceAmount, { color: colors.text }]}>
                   {formatMoney(stats.balance, preferredCurrency)}
@@ -669,7 +670,7 @@ export default function HomeScreen({ navigation }: any) {
                   </View>
                   <View style={styles.txAmountRow}>
                     <AppText style={[styles.txAmount, { color: colors.text }]}>
-                      Rs {formatMoney(Math.abs(bill.amount), '')}
+                      {formatMoney(Math.abs(bill.amount), bill.currency || preferredCurrency)}
                     </AppText>
                     <Icon name="trending-down" size={16} color={colors.danger} />
                   </View>
@@ -719,7 +720,7 @@ export default function HomeScreen({ navigation }: any) {
                   </View>
                   <View style={styles.txAmountRow}>
                     <AppText style={[styles.txAmount, { color: colors.text }]}>
-                      {isIncome ? '' : ''}Rs {formatMoney(Math.abs(item.amount), '')}
+                      {isIncome ? '' : ''}{formatMoney(Math.abs(item.amount), item.currency || preferredCurrency)}
                     </AppText>
                     <Icon name={isIncome ? "trending-up" : "trending-down"} size={16} color={isIncome ? colors.success : colors.danger} />
                   </View>
@@ -852,12 +853,13 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
     marginTop: 8,
     paddingVertical: 4,
+    lineHeight: scaleHeight(30),
   },
 
   // Chart
   chartWrap: {
     marginTop: 10,
-    marginBottom:10,
+    marginBottom: 10,
     // The LineChart renders X-axis labels below the chart area.
     // If this wrapper has a fixed height equal to the chart height, labels get clipped.
     minHeight: 100,
@@ -1006,8 +1008,8 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: radius.xl,
     alignItems: 'center',
-    marginVertical:5,
-    marginLeft:5
+    marginVertical: 5,
+    marginLeft: 5
   },
   budgetCatName: {
     fontSize: 16,

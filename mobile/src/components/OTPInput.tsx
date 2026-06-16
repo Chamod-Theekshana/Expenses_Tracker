@@ -7,9 +7,11 @@ type Props = {
   value: string;
   onChangeText: (text: string) => void;
   editable?: boolean;
+  length?: number;
+  isError?: boolean;
 };
 
-export default function OTPInput({ value, onChangeText, editable = true }: Props) {
+export default function OTPInput({ value, onChangeText, editable = true, length = 6, isError = false }: Props) {
   const { colors } = useContext(ThemeContext);
   const inputs = useRef<(TextInput | null)[]>([]);
 
@@ -19,7 +21,7 @@ export default function OTPInput({ value, onChangeText, editable = true }: Props
     const result = newValue.join('');
     onChangeText(result);
 
-    if (text && index < 5) {
+    if (text && index < length - 1) {
       inputs.current[index + 1]?.focus();
     }
   };
@@ -32,7 +34,7 @@ export default function OTPInput({ value, onChangeText, editable = true }: Props
 
   return (
     <View style={styles.container}>
-      {[0, 1, 2, 3, 4, 5].map((i) => (
+      {Array.from({ length }).map((_, i) => (
         <TextInput
           key={i}
           ref={(ref) => { inputs.current[i] = ref; }}
@@ -40,10 +42,10 @@ export default function OTPInput({ value, onChangeText, editable = true }: Props
             styles.input,
             {
               backgroundColor: colors.surface,
-              borderColor: colors.border,
-              color: colors.text,
+              borderColor: isError ? colors.danger : colors.border,
+              color: isError ? colors.danger : colors.text,
             },
-            value[i] && {
+            value[i] && !isError && {
               borderColor: colors.accent,
               backgroundColor: colors.accentBg,
             },

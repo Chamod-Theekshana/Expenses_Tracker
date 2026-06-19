@@ -22,39 +22,33 @@ function initFirebaseOnce() {
     const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
     if (json && json.trim().length > 0) {
       const serviceAccount = JSON.parse(json);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
+      admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
       enabled = true;
       console.log('[Push Backend] Firebase initialized from FIREBASE_SERVICE_ACCOUNT_JSON');
       return;
     }
 
-    // Option 2: Read service account file from GOOGLE_APPLICATION_CREDENTIALS
+    // Option 2: Path to service account file via GOOGLE_APPLICATION_CREDENTIALS
     const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
     if (credPath) {
       const resolvedPath = path.resolve(credPath);
-      console.log('[Push Backend] Reading service account from:', resolvedPath);
-
       if (!fs.existsSync(resolvedPath)) {
         throw new Error(`Service account file not found: ${resolvedPath}`);
       }
-
-      const fileContents = fs.readFileSync(resolvedPath, 'utf8');
-      const serviceAccount = JSON.parse(fileContents);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
+      const serviceAccount = JSON.parse(fs.readFileSync(resolvedPath, 'utf8'));
+      admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
       enabled = true;
-      console.log('[Push Backend] ✅ Firebase initialized from', resolvedPath);
+      console.log('[Push Backend] Firebase initialized from', resolvedPath);
       return;
     }
 
-    throw new Error('No Firebase credentials found. Set FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS');
+    throw new Error(
+      'No Firebase credentials found. Set FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_APPLICATION_CREDENTIALS'
+    );
   } catch (err: any) {
     enabled = false;
     disabledReason = err?.message || 'Firebase init failed';
-    console.error('[Push Backend] ❌ Firebase init FAILED:', disabledReason);
+    console.error('[Push Backend] Firebase init FAILED:', disabledReason);
   }
 }
 
@@ -68,9 +62,11 @@ export function getPushDisabledReason() {
   return disabledReason;
 }
 
+// ── Token management ─────────────────────────────────────────────────────────
+
 export async function saveUserToken(userId: string | number, token: string) {
   const uid = String(userId);
-  const t = String(token);
+  const t   = String(token);
   if (!uid || !t) return;
 
   await sql`
@@ -81,7 +77,7 @@ export async function saveUserToken(userId: string | number, token: string) {
 }
 
 async function getUserTokens(userId: string | number): Promise<string[]> {
-  const uid = String(userId);
+  const uid  = String(userId);
   const rows = await sql`SELECT token FROM user_fcm_tokens WHERE user_id = ${uid}`;
   return rows.map((r: any) => r.token).filter(Boolean);
 }
@@ -91,24 +87,58 @@ async function removeTokens(tokens: string[]) {
   await sql`DELETE FROM user_fcm_tokens WHERE token = ANY(${tokens}::text[])`;
 }
 
+// ── Notification history persistence ─────────────────────────────────────────
+// Every notification (push OR in-app) is stored in the `notifications` table
+// so the user can open the inbox and see their full history — like FB / IG.
+
+export async function saveNotificationRecord(
+  userId: string | number,
+  title: string,
+  body: string,
+  type = 'general',
+  data?: Record<string, string>
+) {
+  const uid = String(userId);
+  try {
+    await sql`
+      INSERT INTO notifications (user_id, title, body, type, data)
+      VALUES (
+        ${uid},
+        ${title},
+        ${body},
+        ${type},
+        ${JSON.stringify(data ?? {})}
+      )
+    `;
+  } catch (err) {
+    // Non-fatal: log but don't crash the push flow
+    console.error('[Push Backend] Failed to persist notification record:', err);
+  }
+}
+
+// ── Send push to a user ───────────────────────────────────────────────────────
+
 export async function sendPushToUser(
   userId: string | number,
   title: string,
   body: string,
   data?: Record<string, string>
 ) {
-  console.log('[Push Backend] sendPushToUser called — userId:', userId, 'title:', title);
+  console.log('[Push Backend] sendPushToUser — userId:', userId, 'title:', title);
 
+  // 1. Always persist to notification history (works even without Firebase)
+  await saveNotificationRecord(userId, title, body, data?.type ?? 'general', data);
+
+  // 2. Send FCM push if Firebase is configured
   initFirebaseOnce();
   if (!enabled) {
-    console.error('[Push Backend] ❌ Push disabled! Reason:', disabledReason);
+    console.warn('[Push Backend] Push disabled (reason:', disabledReason, ') — notification saved to DB only');
     return;
   }
 
   const tokens = await getUserTokens(userId);
-  console.log('[Push Backend] Tokens for user', userId, ':', tokens.length, 'found');
   if (!tokens.length) {
-    console.warn('[Push Backend] ⚠️ No tokens found for user', userId, '— cannot send push');
+    console.warn('[Push Backend] No FCM tokens for user', userId, '— skipping FCM send');
     return;
   }
 
@@ -119,31 +149,24 @@ export async function sendPushToUser(
       android: { priority: 'high' as const },
     };
 
-    console.log('[Push Backend] Sending FCM message to', tokens.length, 'device(s)...');
     const resp = await admin.messaging().sendEachForMulticast(msg);
     console.log('[Push Backend] FCM response — success:', resp.successCount, 'failure:', resp.failureCount);
 
-    // Log individual failures
-    resp.responses.forEach((r: any, idx: number) => {
-      if (!r.success) {
-        console.error('[Push Backend] ❌ Token failed:', tokens[idx]?.slice(0, 20) + '...', 'error:', r.error?.code, r.error?.message);
-      }
-    });
-
-    // Clean up invalid tokens
+    // Clean up stale / invalid tokens
     const invalid: string[] = [];
     resp.responses.forEach((r: any, idx: number) => {
       if (!r.success) {
-        const code = (r.error as any)?.code || '';
-        if (String(code).includes('registration-token-not-registered') ||
-          String(code).includes('invalid-argument')) {
+        const code = String((r.error as any)?.code || '');
+        if (
+          code.includes('registration-token-not-registered') ||
+          code.includes('invalid-argument')
+        ) {
           invalid.push(tokens[idx]);
         }
       }
     });
     if (invalid.length) await removeTokens(invalid);
   } catch (err) {
-    console.error('[Push Backend] ❌ sendEachForMulticast FAILED:', err);
+    console.error('[Push Backend] sendEachForMulticast FAILED:', err);
   }
 }
-

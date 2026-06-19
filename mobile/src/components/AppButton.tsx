@@ -56,6 +56,7 @@ export default function AppButton({
         <ActivityIndicator color={variant === 'primary' ? '#FFFFFF' : colors.accent} />
       ) : (
         <AppText
+          numberOfLines={1}
           style={[
             { fontWeight: '700', fontSize: size === 'lg' ? 18 : size === 'sm' ? 14 : 16, color: '#FFFFFF' },
             variant === 'secondary' && { color: colors.text },

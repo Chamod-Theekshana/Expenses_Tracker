@@ -3,53 +3,57 @@ import { saveUserToken } from '../services/pushService';
 import { startTestNotifications, stopTestNotifications } from '../services/notificationScheduler';
 import { requireAuth } from '../middleware/requireAuth';
 import { asyncHandler } from '../middleware/asyncHandler';
+import {
+  getNotificationHistory,
+  markAllRead,
+  markOneRead,
+  clearNotifications,
+} from '../controllers/notificationsController';
 
 const router = express.Router();
 
+// All notification routes require auth
 router.use(requireAuth);
 
-// Save user's FCM token (supports multiple devices per user)
+// ── FCM Token ────────────────────────────────────────────────────────────────
+// POST /api/notifications/save-token
+// Called once per device after login; stores the FCM token so the backend
+// can push to this device in the future.
 router.post('/save-token', asyncHandler(async (req, res) => {
-  try {
-    const { fcm_token } = req.body ?? {};
-    const user_id = String((req as any).user?.id);
+  const { fcm_token } = req.body ?? {};
+  const user_id = String((req as any).user?.id);
 
-    if (!user_id || !fcm_token) {
-      return res.status(400).json({ message: 'fcm_token is required' });
-    }
-
-    await saveUserToken(String(user_id), String(fcm_token));
-
-    return res.json({ status: 200, message: 'Token saved' });
-  } catch (err) {
-    console.error('save-token error:', err);
-    return res.status(500).json({ message: 'Server Error' });
+  if (!user_id || !fcm_token) {
+    return res.status(400).json({ message: 'fcm_token is required' });
   }
+
+  await saveUserToken(user_id, String(fcm_token));
+  return res.json({ status: 200, message: 'Token saved' });
 }));
 
-// Start periodic test notifications for a user (every 60s)
+// ── Notification Inbox (Facebook / Instagram style) ──────────────────────────
+// GET  /api/notifications/history        → fetch inbox list + unread count
+// PATCH /api/notifications/mark-all-read → mark all as read (bell tap)
+// PATCH /api/notifications/:id/read      → mark single as read
+// DELETE /api/notifications/clear        → wipe inbox
+router.get('/history',        asyncHandler(getNotificationHistory));
+router.patch('/mark-all-read', asyncHandler(markAllRead));
+router.patch('/:id/read',      asyncHandler(markOneRead));
+router.delete('/clear',        asyncHandler(clearNotifications));
+
+// ── Dev / Test Helpers ───────────────────────────────────────────────────────
+// POST /api/notifications/start-test  → start periodic test pushes (every 60 s)
+// POST /api/notifications/stop-test   → stop them
 router.post('/start-test', asyncHandler(async (req, res) => {
-  try {
-    const user_id = String((req as any).user?.id);
-    await startTestNotifications(user_id);
-    return res.json({ status: 200, message: 'Test notifications started (every 60s)' });
-  } catch (err) {
-    console.error('start-test error:', err);
-    return res.status(500).json({ message: 'Server Error' });
-  }
+  const user_id = String((req as any).user?.id);
+  await startTestNotifications(user_id);
+  return res.json({ status: 200, message: 'Test notifications started (daily schedule)' });
 }));
 
-// Stop periodic test notifications for a user
 router.post('/stop-test', asyncHandler(async (req, res) => {
-  try {
-    const user_id = String((req as any).user?.id);
-    stopTestNotifications(user_id);
-
-    return res.json({ status: 200, message: 'Test notifications stopped' });
-  } catch (err) {
-    console.error('stop-test error:', err);
-    return res.status(500).json({ message: 'Server Error' });
-  }
+  const user_id = String((req as any).user?.id);
+  stopTestNotifications(user_id);
+  return res.json({ status: 200, message: 'Test notifications stopped' });
 }));
 
 export default router;

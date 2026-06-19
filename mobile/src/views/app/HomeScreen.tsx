@@ -1,6 +1,7 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { View, StyleSheet, Pressable, Image, ScrollView, Dimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LineChart } from 'react-native-gifted-charts';
 import AppText from '../../components/AppText';
 import CircularProgress from '../../components/CircularProgress';
@@ -14,7 +15,7 @@ import { DateFilterContext } from '../../store/dateFilter';
 import { SidebarContext } from '../../store/sidebar';
 import { NotificationsContext } from '../../store/notifications';
 import { formatMoney } from '../../utils/money';
-import { scaleHeight } from '../../constants/size';
+import { scaleHeight, TAB_BAR_HEIGHT } from '../../constants/size';
 import { ThemeContext } from '../../store/theme';
 import Icon from '../../components/Icon';
 import { getCategoryMeta } from '../../constants/categories';
@@ -79,6 +80,7 @@ const PagingDots = ({
 };
 
 export default function HomeScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const { items } = useContext(TransactionsContext);
   const { userEmail } = useContext(AuthContext);
   const { name, profilePhoto, currency: preferredCurrency } = useContext(ProfileContext);
@@ -289,11 +291,13 @@ export default function HomeScreen({ navigation }: any) {
 
   const displayDateLine = filterLabel || new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 
+  const tabBarClearance = TAB_BAR_HEIGHT + insets.bottom + scaleHeight(60);
+
   return (
     <View style={[styles.mainWrap, { backgroundColor: colors.bg }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarClearance }]}
       >
         {/* ── 1 + 2. Header & Balance ── */}
         <View style={styles.headerContainer}>
@@ -734,7 +738,7 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         )}
 
-        <View style={{ height: scaleHeight(60) }} />
+
       </ScrollView>
 
       {/* Modals */}
@@ -749,7 +753,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: scaleHeight(55),
-    paddingBottom: scaleHeight(100),
   },
   cardShadowLight: {
     shadowColor: '#000',

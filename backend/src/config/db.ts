@@ -54,7 +54,7 @@ async function _runMigrations() {
         await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS biometric_enabled BOOLEAN NOT NULL DEFAULT false`;
         await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0`;
 
-        // ✅ FCM tokens table (supports multiple devices per user)
+        // FCM tokens table (supports multiple devices per user)
         await sql`CREATE TABLE IF NOT EXISTS user_fcm_tokens(
             id SERIAL PRIMARY KEY,
             user_id VARCHAR(255) NOT NULL,
@@ -168,7 +168,7 @@ async function _runMigrations() {
         await sql`CREATE INDEX IF NOT EXISTS idx_reminders_due_date ON reminders(due_date)`;
         await sql`CREATE INDEX IF NOT EXISTS idx_reminders_user_active_due ON reminders(user_id, is_active, due_date)`;
 
-        // ── Savings Goals ────────────────────────────────────────────────
+        // Savings Goals
         await sql`CREATE TABLE IF NOT EXISTS goals(
             id SERIAL PRIMARY KEY,
             user_id VARCHAR(255) NOT NULL,
@@ -183,6 +183,23 @@ async function _runMigrations() {
         await sql`ALTER TABLE goals ADD COLUMN IF NOT EXISTS is_completed BOOLEAN NOT NULL DEFAULT false`;
         await sql`ALTER TABLE goals ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`;
 
-        // ── Transaction Receipts ─────────────────────────────────────────
+        // Transaction Receipts
         await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS receipt_url TEXT`;
-}
+
+        // ── NOTIFICATION HISTORY TABLE ─────────────────────────────────────────
+        // Stores every push/in-app notification per user so they can see a history
+        // inbox like Facebook / Instagram — survives app restarts
+        await sql`CREATE TABLE IF NOT EXISTS notifications(
+            id SERIAL PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            title TEXT NOT NULL,
+            body TEXT DEFAULT '',
+            type VARCHAR(50) DEFAULT 'general',
+            data JSONB DEFAULT '{}',
+            read BOOLEAN DEFAULT false,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`;
+        await sql`CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)`;
+        await sql`CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC)`;
+        await sql`CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read)`;
+}

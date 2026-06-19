@@ -8,7 +8,7 @@ import AppInput from '../../components/AppInput';
 import AppPicker from '../../components/AppPicker';
 import Card from '../../components/Card';
 import Icon, { type IconName } from '../../components/Icon';
-import { scaleHeight } from '../../constants/size';
+import { scaleHeight, TAB_BAR_HEIGHT } from '../../constants/size';
 import { ProfileService } from '../../services/ProfileService';
 import { AuthContext } from '../../store/auth';
 import { ProfileContext } from '../../store/profile';
@@ -450,7 +450,7 @@ export default function ProfileScreen({ navigation }: any) {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 18, scaleHeight(160)) }]}
+        contentContainerStyle={[styles.content, { paddingBottom: TAB_BAR_HEIGHT + insets.bottom + scaleHeight(60) }]}
       >
         <Card elevated style={[styles.userCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.userRow}>

@@ -1,25 +1,36 @@
+/**
+ * RootNavigator
+ *
+ * Handles:
+ *  - Auth state → AuthStack / AppStack routing
+ *  - Biometric lock on app resume
+ *  - FCM push initialisation + foreground listener
+ *  - Socket.IO real-time events
+ *  - Notification inbox sync (fetchHistory after login + on each push)
+ */
+
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, Modal, StyleSheet, View } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { appLinking } from './linking';
 
-import { AuthContext } from '../store/auth';
+import { AuthContext }         from '../store/auth';
 import { TransactionsContext } from '../store/transactions';
-import { ProfileContext } from '../store/profile';
-import { ThemeContext } from '../store/theme';
+import { ProfileContext }      from '../store/profile';
+import { ThemeContext }        from '../store/theme';
 
-import AuthStack from './AuthStack';
-import AppStack from './AppStack';
+import AuthStack    from './AuthStack';
+import AppStack     from './AppStack';
 import SplashScreen from '../views/SplashScreen';
-import { ProfileService } from '../services/ProfileService';
+import { ProfileService }       from '../services/ProfileService';
 import { promptForBiometricUnlock } from '../services/biometricAuth';
-import { flushOfflineOutbox } from '../services/offlineOutbox';
+import { flushOfflineOutbox }   from '../services/offlineOutbox';
 
 import { NotificationsProvider, NotificationsContext } from '../store/notifications';
 import NotificationBanner from '../components/NotificationBanner';
-import AppText from '../components/AppText';
+import AppText   from '../components/AppText';
 import AppButton from '../components/AppButton';
-import Icon from '../components/Icon';
+import Icon      from '../components/Icon';
 import { connectSocket, disconnectSocket, onEvent, offEvent } from '../services/socketService';
 import { initPushForLoggedInUser, listenForegroundPush } from '../services/PushNotificationService';
 
@@ -28,31 +39,27 @@ function RootNavigatorInner() {
   const { fetchTransactions, clearTransactions } = useContext(TransactionsContext);
   const { loadProfile, clearProfile, biometricEnabled } = useContext(ProfileContext);
   const { setTheme, colors } = useContext(ThemeContext);
-  const { show } = useContext(NotificationsContext);
+  const { show, fetchHistory, addToHistory } = useContext(NotificationsContext);
 
-  const [showSplash, setShowSplash] = useState(true);
-  const [dataLoaded, setDataLoaded] = useState(false);
+  const [showSplash,  setShowSplash]  = useState(true);
+  const [dataLoaded,  setDataLoaded]  = useState(false);
   const [isAppLocked, setIsAppLocked] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
 
-  const appStateRef = useRef(AppState.currentState);
-  const unlockTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const initialLockAttemptedRef = useRef(false);
+  const appStateRef               = useRef(AppState.currentState);
+  const unlockTimeoutRef          = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialLockAttemptedRef   = useRef(false);
+
+  // ── Biometric unlock ────────────────────────────────────────────────────────
 
   const unlockWithBiometrics = useCallback(async () => {
-    if (isUnlocking) {
-      return;
-    }
-
+    if (isUnlocking) return;
     setIsUnlocking(true);
     const success = await promptForBiometricUnlock('Unlock PulseSpend');
-    if (success) {
-      setIsAppLocked(false);
-    }
+    if (success) setIsAppLocked(false);
     setIsUnlocking(false);
   }, [isUnlocking]);
 
-  // Clear data on logout
   useEffect(() => {
     if (!userId) {
       clearProfile();
@@ -62,39 +69,24 @@ function RootNavigatorInner() {
   }, [userId, clearProfile, clearTransactions]);
 
   useEffect(() => {
-    if (!userId || !biometricEnabled) {
-      setIsAppLocked(false);
-    }
+    if (!userId || !biometricEnabled) setIsAppLocked(false);
   }, [userId, biometricEnabled]);
 
   useEffect(() => {
-    if (!userId || !biometricEnabled) {
-      return;
-    }
-
-    const subscription = AppState.addEventListener('change', nextState => {
-      const previousState = appStateRef.current;
+    if (!userId || !biometricEnabled) return;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const prev = appStateRef.current;
       appStateRef.current = nextState;
-
-      const returnedToForeground =
-        (previousState === 'background' || previousState === 'inactive') && nextState === 'active';
-
-      if (!returnedToForeground) {
-        return;
-      }
-
+      const returnedToFg =
+        (prev === 'background' || prev === 'inactive') && nextState === 'active';
+      if (!returnedToFg) return;
       setIsAppLocked(true);
-
-      if (unlockTimeoutRef.current) {
-        clearTimeout(unlockTimeoutRef.current);
-      }
-
+      if (unlockTimeoutRef.current) clearTimeout(unlockTimeoutRef.current);
       unlockTimeoutRef.current = setTimeout(() => {
         unlockTimeoutRef.current = null;
         unlockWithBiometrics();
       }, 220);
     });
-
     return () => {
       subscription.remove();
       if (unlockTimeoutRef.current) {
@@ -104,7 +96,8 @@ function RootNavigatorInner() {
     };
   }, [biometricEnabled, unlockWithBiometrics, userId]);
 
-  // Load initial data when authenticated
+  // ── Initial data load ────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (userId && !dataLoaded) {
       (async () => {
@@ -115,6 +108,10 @@ function RootNavigatorInner() {
           ]);
           await loadProfile(userId);
           if (profileData?.theme) setTheme(profileData.theme);
+
+          // Fetch notification history from backend right after login
+          // so the inbox badge is accurate immediately
+          await fetchHistory();
         } catch (error) {
           console.error('[RootNavigator] Failed to load initial data:', error);
         } finally {
@@ -122,28 +119,19 @@ function RootNavigatorInner() {
         }
       })();
     }
-  }, [userId, dataLoaded, fetchTransactions, loadProfile, setTheme]);
+  }, [userId, dataLoaded, fetchTransactions, loadProfile, setTheme, fetchHistory]);
 
-  // On cold start (initial load) if biometric lock is enabled, lock the app
+  // Initial biometric lock
   useEffect(() => {
     if (!userId || !biometricEnabled || !dataLoaded) return;
-
-    // ensure this runs only once per app process start
     if (initialLockAttemptedRef.current) return;
     initialLockAttemptedRef.current = true;
-
     setIsAppLocked(true);
-
-    // give UI a short moment to render modal, then prompt biometrics
-    if (unlockTimeoutRef.current) {
-      clearTimeout(unlockTimeoutRef.current);
-    }
-
+    if (unlockTimeoutRef.current) clearTimeout(unlockTimeoutRef.current);
     unlockTimeoutRef.current = setTimeout(() => {
       unlockTimeoutRef.current = null;
       unlockWithBiometrics();
     }, 220);
-
     return () => {
       if (unlockTimeoutRef.current) {
         clearTimeout(unlockTimeoutRef.current);
@@ -152,19 +140,22 @@ function RootNavigatorInner() {
     };
   }, [userId, biometricEnabled, dataLoaded, unlockWithBiometrics]);
 
-  // FCM Push notifications
+  // ── FCM Push notifications ────────────────────────────────────────────────
+
   useEffect(() => {
     if (!userId) return;
-
-    let unsubscribeForeground: (() => void) | undefined;
+    let unsubForeground: (() => void) | undefined;
 
     (async () => {
       try {
         await initPushForLoggedInUser(userId);
-        unsubscribeForeground = listenForegroundPush((title, body, dataType) => {
-          // Show in-app banner for relevant notifications
+        unsubForeground = listenForegroundPush((title, body, dataType) => {
+          // Show in-app banner for all but the periodic test pushes
           if (dataType !== 'test_periodic') {
             show({ title, body });
+            addToHistory({ title, body });
+            // Refresh the inbox so the new item appears in the list immediately
+            fetchHistory();
           }
         });
       } catch (e) {
@@ -173,11 +164,12 @@ function RootNavigatorInner() {
     })();
 
     return () => {
-      if (unsubscribeForeground) unsubscribeForeground();
+      if (unsubForeground) unsubForeground();
     };
-  }, [userId, show]);
+  }, [userId, show, addToHistory, fetchHistory]);
 
-  // Socket.IO real-time events
+  // ── Socket.IO real-time events ────────────────────────────────────────────
+
   useEffect(() => {
     if (!userId || !dataLoaded || !token) return;
 
@@ -187,33 +179,27 @@ function RootNavigatorInner() {
       if (payload?.title) show({ title: payload.title, body: payload.body });
       try { await fetchTransactions(userId); } catch { /* silent */ }
     };
-
     const onUpdatedTx = async (payload: any) => {
       if (payload?.title) show({ title: payload.title, body: payload.body });
       try { await fetchTransactions(userId); } catch { /* silent */ }
     };
-
     const onDeletedTx = async (payload: any) => {
       if (payload?.title) show({ title: payload.title, body: payload.body });
       try { await fetchTransactions(userId); } catch { /* silent */ }
     };
-
     const onProfileUpdated = async (payload: any) => {
       try {
         await loadProfile(userId);
         if (payload?.profile?.theme) setTheme(payload.profile.theme);
       } catch { /* silent */ }
     };
-
     const onBudgetCreated = (payload: any) => {
-      show({ title: "✅ Budget Set", body: `Budget for ${payload?.budget?.category} created` });
+      show({ title: '✅ Budget Set', body: `Budget for ${payload?.budget?.category} created` });
     };
     const onBudgetUpdated = (payload: any) => {
-      show({ title: "📝 Budget Updated", body: `Budget for ${payload?.budget?.category} updated` });
+      show({ title: '📝 Budget Updated', body: `Budget for ${payload?.budget?.category} updated` });
     };
-    const onBudgetDeleted = () => {
-      // silent
-    };
+    const onBudgetDeleted = () => { /* silent */ };
     const onBudgetAlert = (payload: any) => {
       if (payload?.category && payload?.level) {
         const isExceeded = payload.level === 'exceeded';
@@ -223,13 +209,11 @@ function RootNavigatorInner() {
         });
       }
     };
-
     const onGoalCompleted = (payload: any) => {
       if (payload?.goal?.name) {
         show({ title: '🎉 Goal Completed!', body: `You reached your "${payload.goal.name}" goal!` });
       }
     };
-
     const onReminderDue = (payload: any) => {
       if (payload?.title || payload?.body) {
         show({
@@ -239,38 +223,37 @@ function RootNavigatorInner() {
       }
     };
 
-    onEvent('tx:new', onNewTx);
-    onEvent('tx:updated', onUpdatedTx);
-    onEvent('tx:deleted', onDeletedTx);
-    onEvent('profile:updated', onProfileUpdated);
+    onEvent('tx:new',         onNewTx);
+    onEvent('tx:updated',     onUpdatedTx);
+    onEvent('tx:deleted',     onDeletedTx);
+    onEvent('profile:updated',onProfileUpdated);
     onEvent('budget:created', onBudgetCreated);
     onEvent('budget:updated', onBudgetUpdated);
     onEvent('budget:deleted', onBudgetDeleted);
-    onEvent('budget:alert', onBudgetAlert);
+    onEvent('budget:alert',   onBudgetAlert);
     onEvent('goal:completed', onGoalCompleted);
-    onEvent('reminder:due', onReminderDue);
+    onEvent('reminder:due',   onReminderDue);
 
     return () => {
-      offEvent('tx:new', onNewTx);
-      offEvent('tx:updated', onUpdatedTx);
-      offEvent('tx:deleted', onDeletedTx);
-      offEvent('profile:updated', onProfileUpdated);
+      offEvent('tx:new',         onNewTx);
+      offEvent('tx:updated',     onUpdatedTx);
+      offEvent('tx:deleted',     onDeletedTx);
+      offEvent('profile:updated',onProfileUpdated);
       offEvent('budget:created', onBudgetCreated);
-    offEvent('budget:updated', onBudgetUpdated);
-    offEvent('budget:deleted', onBudgetDeleted);
-    offEvent('budget:alert', onBudgetAlert);
+      offEvent('budget:updated', onBudgetUpdated);
+      offEvent('budget:deleted', onBudgetDeleted);
+      offEvent('budget:alert',   onBudgetAlert);
       offEvent('goal:completed', onGoalCompleted);
-      offEvent('reminder:due', onReminderDue);
+      offEvent('reminder:due',   onReminderDue);
       disconnectSocket();
     };
   }, [userId, token, dataLoaded, fetchTransactions, loadProfile, setTheme, show]);
 
-  // Retry queued writes when the app returns online / foreground
+  // ── Offline outbox flush ──────────────────────────────────────────────────
+
   useEffect(() => {
     if (!userId) return;
-    const run = () => {
-      flushOfflineOutbox().catch(() => {});
-    };
+    const run = () => flushOfflineOutbox().catch(() => {});
     run();
     const sub = AppState.addEventListener('change', (next) => {
       if (next === 'active') run();
@@ -278,7 +261,8 @@ function RootNavigatorInner() {
     return () => sub.remove();
   }, [userId]);
 
-  // Hide splash screen
+  // ── Splash ────────────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (!isLoading && (!userId || dataLoaded)) {
       const t = setTimeout(() => setShowSplash(false), 300);
@@ -291,10 +275,10 @@ function RootNavigatorInner() {
     colors: {
       ...DefaultTheme.colors,
       background: colors.bg,
-      card: colors.bg,
-      text: colors.text,
-      border: colors.border,
-      primary: colors.accent,
+      card:       colors.bg,
+      text:       colors.text,
+      border:     colors.border,
+      primary:    colors.accent,
     },
   };
 
@@ -310,16 +294,14 @@ function RootNavigatorInner() {
       {userEmail && biometricEnabled ? (
         <Modal visible={isAppLocked} transparent animationType="fade" onRequestClose={() => {}}>
           <View style={styles.lockOverlay}>
-            <View style={[styles.lockCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+            <View style={[styles.lockCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={[styles.lockIconWrap, { backgroundColor: colors.accent + '18' }]}>
                 <Icon name="lock" size={24} color={colors.accent} />
               </View>
-
               <AppText style={[styles.lockTitle, { color: colors.text }]}>App Locked</AppText>
               <AppText muted style={styles.lockMessage}>
                 Authenticate with biometrics to continue.
               </AppText>
-
               <View style={{ width: '100%', marginTop: 16 }}>
                 <AppButton
                   title={isUnlocking ? 'Checking...' : 'Unlock with Biometrics'}
@@ -328,7 +310,6 @@ function RootNavigatorInner() {
                   disabled={isUnlocking}
                 />
               </View>
-
               <View style={{ width: '100%', marginTop: 10 }}>
                 <AppButton
                   title="Sign Out"
@@ -356,7 +337,7 @@ export default function RootNavigator() {
 const styles = StyleSheet.create({
   lockOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.58)',
+    backgroundColor: 'rgba(0,0,0,0.58)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,

@@ -37,6 +37,10 @@ export const scaleHeight = (size: number) => {
   return (height / currentBaseHeight) * size;
 };
 
+/** Base tab bar height (excluding safe area bottom inset).
+ *  Add useSafeAreaInsets().bottom to get the full clearance. */
+export const TAB_BAR_HEIGHT = scaleHeight(92);
+
 export function useBack(navigation: any) {
   useEffect(() => {
     const backAction = () => {

@@ -1,12 +1,13 @@
 import React, { useContext, useMemo, useState } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PieChart, BarChart } from 'react-native-gifted-charts';
 import AppText from '../../components/AppText';
 import { spacing, radius } from '../../theme/colors';
 import { TransactionsContext } from '../../store/transactions';
 import { DateFilterContext } from '../../store/dateFilter';
 import { formatMoney } from '../../utils/money';
-import { scaleHeight } from '../../constants/size';
+import { scaleHeight, TAB_BAR_HEIGHT } from '../../constants/size';
 import { ThemeContext } from '../../store/theme';
 import { ProfileContext } from '../../store/profile';
 import Icon from '../../components/Icon';
@@ -15,6 +16,7 @@ import DateFilterSheet from '../../components/DateFilterSheet';
 const { width } = Dimensions.get('window');
 
 export default function ChartsScreen() {
+  const insets = useSafeAreaInsets();
   const { items } = useContext(TransactionsContext);
   const { colors, theme } = useContext(ThemeContext);
   const { matchesFilter, hasActiveFilter } = useContext(DateFilterContext);
@@ -122,7 +124,7 @@ export default function ChartsScreen() {
         </Pressable>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: scaleHeight(160) }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + insets.bottom + scaleHeight(60) }}>
         
         {/* Expense by Category */}
         <View style={[styles.card, cardShadow, { backgroundColor: colors.surface, borderColor: colors.border }]}>

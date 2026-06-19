@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { View, StyleSheet, Alert, ActivityIndicator, Pressable, ScrollView, SectionList } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import AppText from '../../components/AppText';
 import { spacing, radius } from '../../theme/colors';
@@ -8,7 +9,7 @@ import { DateFilterContext } from '../../store/dateFilter';
 import { AuthContext } from '../../store/auth';
 import Icon from '../../components/Icon';
 import { ThemeContext } from '../../store/theme';
-import { scaleHeight } from '../../constants/size';
+import { scaleHeight, TAB_BAR_HEIGHT } from '../../constants/size';
 import { formatMoney } from '../../utils/money';
 import { getCategoryMeta } from '../../constants/categories';
 import DateFilterSheet from '../../components/DateFilterSheet';
@@ -19,6 +20,7 @@ type TypeFilter = (typeof TYPE_FILTERS)[number];
 
 export default function TransactionsScreen() {
   const navigation: any = useNavigation();
+  const insets = useSafeAreaInsets();
   const {
     items,
     removeTx,
@@ -207,7 +209,7 @@ export default function TransactionsScreen() {
         sections={groupedItems}
         keyExtractor={(item) => item.id}
         stickySectionHeadersEnabled={false}
-        contentContainerStyle={{ paddingBottom: scaleHeight(160) }}
+        contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + insets.bottom + scaleHeight(60) }}
         showsVerticalScrollIndicator={false}
         onEndReached={() => {
           if (!userId || !hasMoreTransactions || loadingMore) return;
